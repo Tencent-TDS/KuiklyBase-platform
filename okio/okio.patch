@@ -1,0 +1,937 @@
+Subject: [PATCH] okio
+---
+Index: settings.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+--- a/settings.gradle.kts	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/settings.gradle.kts	(date 1761571383363)
+@@ -1,5 +1,14 @@
+ rootProject.name = "okio-parent"
+-
++pluginManagement {
++  repositories {
++    mavenLocal()
++    maven("https://mirrors.tencent.com/repository/maven/tencent_public")
++    maven("https://mirrors.tencent.com/nexus/repository/maven-public")
++    google()
++    mavenCentral()
++    gradlePluginPortal()
++  }
++}
+ includeBuild("build-support")
+ 
+ include(":okio")
+Index: docs/GzipOrZip.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docs/GzipOrZip.md b/docs/GzipOrZip.md
+new file mode 100644
+--- /dev/null	(date 1761556170265)
++++ b/docs/GzipOrZip.md	(date 1761556170265)
+@@ -0,0 +1,48 @@
++Gzip or Zip demo
++===============
++
++
++## 使用OKIO的压缩能力进行压缩和解压缩
++
++### 1. GZIP 压缩
++
++```kotlin
++fun gzipSink(sourceString: String): String {
++    val data = Buffer()
++    (data as Sink).gzip().buffer().use { gzip ->
++        gzip.writeUtf8(sourceString)
++    }
++    return data.readByteString().hex()
++}
++```
++基本思路就是构建 Sink 输出类之后，拿到 buffer 往 buffer 里写入需要压缩的源。
++
++结合 OKIO 的 `fileSystem.sink()`可以实现往文件里压缩源数据的功能
++
++
++### 2. GZIP 解压缩
++
++```kotlin
++internal fun gzipSource(sinkString: String): String? {
++    val buffer = Buffer().write(sinkString.decodeHex())
++    var res: String? = null
++    (buffer as Source).gzip().buffer().use { gzip ->
++        res = gzip.readUtf8()
++    }
++    return res
++}
++```
++基本思路就是构建 Source 输入类之后，拿到 buffer 从 buffer 里读出已经压缩的源。
++
++结合 OKIO 的 `fileSystem.source()`可以实现从文件里读取源数据的功能
++
++
++### 3. ZIP 解压缩文件
++```kotlin
++internal fun openZip(path: String) {
++    val zipPath = path.toPath()
++    val zipFileSystem = fileSystem.openZip(zipPath)
++    logger(zipFileSystem.list("/".toPath()).toString())
++}
++```
++通过 OKio 提供的文件管理系统，即可打开已经下载好的 zip 文件，可以从这个系统里去获取对于的文件去拿到源文件，读取流，具体可以参考 okio 的使用方式
+Index: build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle.kts b/build.gradle.kts
+--- a/build.gradle.kts	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/build.gradle.kts	(date 1761566823600)
+@@ -22,9 +22,20 @@
+ 
+ plugins {
+   id("build-support").apply(false)
++//  id("com.tencent.tmm.k2config").version("1.0").apply(false)
+ }
+ 
+ buildscript {
++
++  repositories {
++//    mavenLocal()
++    maven("https://mirrors.tencent.com/nexus/repository/maven-public/")
++    maven ("https://mirrors.tencent.com/repository/maven/tencent_public")
++    mavenCentral()
++    gradlePluginPortal()
++    google()
++  }
++
+   dependencies {
+     classpath(libs.android.gradle.plugin)
+     classpath(libs.dokka)
+@@ -35,11 +46,6 @@
+     classpath(libs.vanniktech.publish.plugin)
+   }
+ 
+-  repositories {
+-    mavenCentral()
+-    gradlePluginPortal()
+-    google()
+-  }
+ }
+ 
+ apply(plugin = "com.vanniktech.maven.publish.base")
+@@ -53,6 +59,9 @@
+   version = project.property("VERSION_NAME") as String
+ 
+   repositories {
++//    mavenLocal()
++    maven("https://mirrors.tencent.com/nexus/repository/maven-public/")
++    maven ("https://mirrors.tencent.com/repository/maven/tencent_public")
+     mavenCentral()
+     google()
+   }
+Index: okio/src/unixMain/kotlin/okio/UnixPosixVariant.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/okio/src/unixMain/kotlin/okio/UnixPosixVariant.kt b/okio/src/unixMain/kotlin/okio/UnixPosixVariant.kt
+--- a/okio/src/unixMain/kotlin/okio/UnixPosixVariant.kt	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/okio/src/unixMain/kotlin/okio/UnixPosixVariant.kt	(date 1761556170267)
+@@ -25,7 +25,7 @@
+ import kotlinx.cinterop.toKString
+ import okio.Path.Companion.toPath
+ import okio.internal.toPath
+-import platform.posix.DEFFILEMODE
++//import platform.posix.DEFFILEMODE
+ import platform.posix.ENOENT
+ import platform.posix.FILE
+ import platform.posix.O_CREAT
+@@ -146,7 +146,7 @@
+     else -> O_RDWR or O_CREAT
+   }
+ 
+-  val fid = open(file.toString(), flags, DEFFILEMODE)
++  val fid = open(file.toString(), flags, 666)
+   if (fid == -1) throw errnoToIOException(errno)
+ 
+   // Use 'r+' to get reading and writing on the FILE, which is all we need.
+Index: master_push.sh
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/master_push.sh b/master_push.sh
+new file mode 100755
+--- /dev/null	(date 1761556170266)
++++ b/master_push.sh	(date 1761556170266)
+@@ -0,0 +1,193 @@
++#!/bin/sh
++
++# 入参个数
++PARAM_COUNT=$#
++# 入参列表
++PARAM_LIST=$@
++# AutoPush版本信息
++AP_VERSION="v2.1.5"
++
++# 获取当前路径的跟路径, 方便读写git hook里的文件
++GIT_PATH=$(git rev-parse --show-toplevel)
++
++# 文件夹名称
++AUTO_TMP_NAME="autopushremote"
++# 主干开发和feature分支开发脚本存储的地方
++AUTO_TMP="${GIT_PATH}/${AUTO_TMP_NAME}"
++# feature分支开发脚本
++AUTO_PATH="${AUTO_TMP}/autopush_remote.sh"
++# 主干开发脚本路径
++AUTO_MASTER_PATH="${AUTO_TMP}/autopush_master.sh"
++
++export TAPD_TOKEN="auto_ovb:698854E8-30BF-7E66-6BC1-F742E3FF510F"
++
++export TAPD_PROJECT_ID="10078431"
++
++function main()
++{
++    echo "当前版本:$AP_VERSION"
++    # 检查入参判定是主干开发还是feature开发
++    checkParam
++}
++
++
++# 检查入参
++function checkParam()
++{
++    # 通过判断参数个数决定执行的脚本
++    if [[ $PARAM_COUNT -lt 1 ]] ;then
++        # 非主干开发,使用旧的feature分支开发.
++        runAutopushRemote
++    else
++        # 此处执行新的主干开发逻辑
++        runAutopushMaster
++
++    fi
++}
++
++# 下载主干开发脚本
++function runAutopushMaster()
++{
++    # 下载主干开发脚本 并执行
++    local url="http://dldir1.qq.com/qqmi/script/autopush/1.0.1/autopush_master.sh"
++    runRemote "autopush_master.sh" "${AUTO_MASTER_PATH}" "${url}" ${PARAM_LIST}
++}
++
++# 下载feature分支开发脚本
++function runAutopushRemote()
++{
++    # 下载脚本 并执行
++    url="http://dldir1.qq.com/qqmi/script/autopush/1.0.0/autopush_remote.sh"
++    runRemote "autopush_remote.sh" "${AUTO_PATH}" "${url}" ${PARAM_LIST}
++}
++
++# 执行远端脚本
++function runRemote()
++{
++    # 脚本名称
++    local sh_name=${1}
++    # 脚本路径
++    local path=${2}
++    # 脚本的url
++    local url=${3}
++    # 脚本需要的参数
++    local params=${4}
++    # 下载脚本
++    downloadScript "${sh_name}" "${path}" "${url}"
++    # 执行脚本
++    excuteScript "${path}" ${params}
++}
++
++# 下载脚本
++# 为了避免网络问题引起的下载文件见不全的问题,这里下载之后判断如果文件内容不为空则替换,否则使用缓存文件
++function downloadScript()
++{
++    # 脚本名称
++    local sh_name=${1}
++    # 脚本路径
++    local path=${2}
++    # 脚本的url
++    local url=${3}
++
++    # 创建存储文件夹
++    newDirIfNeed ${AUTO_TMP}
++
++    # 创建临时存储文件夹
++    local download_tmp="tmp_download"
++    newDirIfNeed $download_tmp
++
++    # 下载文件到临时文件夹
++    download "$sh_name" "$download_tmp/$sh_name" "$url"
++
++    # 判断下载的脚本文件是否为空
++    check_file_null "$download_tmp/$sh_name"
++
++    local file_exist=$?
++    if [[ $file_exist -eq 0 ]];then
++        echo "文件下载成功,删除旧文件:$path"
++        rm -rf $path
++        echo "移动文件到制定目录:${AUTO_TMP}"
++        mv -f $download_tmp/$sh_name ${AUTO_TMP}
++    fi
++
++    echo "删除临时文件夹:$download_tmp"
++    rm -rf $download_tmp
++}
++
++# 执行脚本
++function excuteScript()
++{
++    # 脚本路径
++    local path=${1}
++    # 脚本参数
++    local params=${2}
++
++    # 判断脚本路径是否存在
++    if [[ ! -f ${path} ]]; then
++        echo "${path} 不存在"
++        exit 1
++    fi
++    echo "开始执行autopush脚本"
++    sh $path $PARAM_LIST
++}
++
++# 检查文件是否为空
++function check_file_null()
++{
++    # 文件路径
++    local file_path=${1}
++    if [[ -z $file_path ]];then
++        echo "下载路径不存在"
++        return 1
++    fi
++    # 获得当前路径
++    local cur_path=$(PWD)
++    # 得到文件所在的文件夹
++    local dir_path=${file_path%/*}
++    # 跳转到文件所在的文件夹
++    if [[ ! -d $dir_path ]];then
++        echo "文件夹不存在"
++        return 1
++    fi
++    # 跳转到文件所在目录下
++    cd $dir_path
++    # 获得文件size
++    local file_size=$(ls -l ${file_path##*/} | awk '{print $5}')
++    echo "下载文件的大小:$file_size"
++    min_size=$((1024*1))
++    # 判断文件大小,小于1k则认为脚本下载失败
++    if [[ $file_size -lt $min_size ]]; then
++        cd $cur_path
++        return 1
++    fi
++    cd $cur_path
++    return 0
++}
++
++
++# 下载二进制文件，用来执行后面的命令
++# downName - 文件的名称
++# downFile - 文件的存储位置
++# reqUrl - 远端地址
++function download()
++{
++    local downName="${1}"
++    local downFile="${2}"
++    local reqUrl="${3}"
++    echo "下载${downName}..."
++    curl -so "${downFile}" "${reqUrl}" -L
++    chmod +x "${downFile}"
++    # echoFile ""
++}
++
++# 新创建文件夹，如果文件夹已存在什么也不做
++# dir - 想要创建的文件夹
++function newDirIfNeed()
++{
++    local dir="${1}"
++    if [[ ! -d "${dir}" ]]; then
++        mkdir -p "${dir}"
++    fi
++}
++
++main
+Index: android-test/build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/android-test/build.gradle.kts b/android-test/build.gradle.kts
+--- a/android-test/build.gradle.kts	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/android-test/build.gradle.kts	(date 1761566823599)
+@@ -8,9 +8,13 @@
+ 
+ buildscript {
+   repositories {
++    maven("https://mirrors.tencent.com/nexus/repository/maven-public/")
++    maven ("https://mirrors.tencent.com/repository/maven/tencent_public")
+     mavenCentral()
+     gradlePluginPortal()
+     google()
++//    mavenLocal()
++
+   }
+ }
+ 
+Index: okio-fakefilesystem/build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/okio-fakefilesystem/build.gradle.kts b/okio-fakefilesystem/build.gradle.kts
+--- a/okio-fakefilesystem/build.gradle.kts	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/okio-fakefilesystem/build.gradle.kts	(date 1761566823603)
+@@ -5,7 +5,7 @@
+ plugins {
+   kotlin("multiplatform")
+   id("org.jetbrains.dokka")
+-  id("com.vanniktech.maven.publish.base")
++//  id("com.vanniktech.maven.publish.base")
+   id("binary-compatibility-validator")
+   id("build-support")
+ }
+@@ -73,8 +73,8 @@
+   }
+ }
+ 
+-configure<MavenPublishBaseExtension> {
+-  configure(
+-    KotlinMultiplatform(javadocJar = Dokka("dokkaGfm"))
+-  )
+-}
++//configure<MavenPublishBaseExtension> {
++//  configure(
++//    KotlinMultiplatform(javadocJar = Dokka("dokkaGfm"))
++//  )
++//}
+Index: build-support/build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build-support/build.gradle.kts b/build-support/build.gradle.kts
+--- a/build-support/build.gradle.kts	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/build-support/build.gradle.kts	(date 1761566823599)
+@@ -4,7 +4,12 @@
+ }
+ 
+ repositories {
++  maven("https://mirrors.tencent.com/nexus/repository/maven-public/")
++  maven ("https://mirrors.tencent.com/repository/maven/tencent_public")
++
+   mavenCentral()
++//  mavenLocal()
++
+ }
+ 
+ dependencies {
+@@ -22,5 +27,6 @@
+ }
+ 
+ dependencies {
++  implementation(libs.org.jetbrains.kotlin.multiplatform.gradle.plugin)
+   implementation(libs.kotlin.gradle.plugin)
+ }
+Index: okio/build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/okio/build.gradle.kts b/okio/build.gradle.kts
+--- a/okio/build.gradle.kts	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/okio/build.gradle.kts	(date 1761566823605)
+@@ -2,6 +2,7 @@
+ import com.vanniktech.maven.publish.JavadocJar.Dokka
+ import com.vanniktech.maven.publish.KotlinMultiplatform
+ import com.vanniktech.maven.publish.MavenPublishBaseExtension
++import java.net.URI
+ import kotlinx.validation.ApiValidationExtension
+ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithTests
+ import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType
+@@ -10,11 +11,27 @@
+ plugins {
+   kotlin("multiplatform")
+   id("org.jetbrains.dokka")
+-  id("com.vanniktech.maven.publish.base")
+   id("build-support")
+   id("binary-compatibility-validator")
++  `maven-publish`
+ }
+ 
++//发布组件名称和版本号
++group = project.properties["MAVEN_GROUP"]!!
++version = "3.9.10-KBA-001"
++
++//支持本地发布release版本
++publishing {
++  repositories {
++    maven {
++      credentials {
++        username = project.findProperty("maven_username") as String
++        password = project.findProperty("maven_password") as String
++      }
++      url = URI(project.findProperty("maven_publish_url") as String)
++    }
++  }
++}
+ /*
+  * Here's the main hierarchy of variants. Any `expect` functions in one level of the tree are
+  * `actual` functions in a (potentially indirect) child node.
+@@ -147,6 +164,10 @@
+             .also { unixMain ->
+               createSourceSet("linuxMain", parent = unixMain, children = linuxTargets).also { linuxMain ->
+                 linuxMain.dependsOn(nonAppleMain)
++                val ohosArm64Main by getting {
++                  dependsOn(nonAppleMain)
++                  dependsOn(linuxMain)
++                }
+               }
+               createSourceSet("appleMain", parent = unixMain, children = appleTargets)
+             }
+@@ -209,11 +230,11 @@
+   }
+ }
+ 
+-configure<MavenPublishBaseExtension> {
+-  configure(
+-    KotlinMultiplatform(javadocJar = Dokka("dokkaGfm")),
+-  )
+-}
++//configure<MavenPublishBaseExtension> {
++//  configure(
++//    KotlinMultiplatform(javadocJar = Dokka("dokkaGfm")),
++//  )
++//}
+ 
+ plugins.withId("binary-compatibility-validator") {
+   configure<ApiValidationExtension> {
+Index: README.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/README.md b/README.md
+--- a/README.md	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/README.md	(date 1761571343220)
+@@ -1,29 +1,125 @@
+-Okio
+-====
++# Okio
++
++KMM okio用于方便高效地处理I/O操作，常见的文件、网络请求数据、内存数据的读写操作，主要功能、特性如下：
++
++1. 跨平台支持：KMM 版本的 Okio 库可以在 Android 、 iOS、ohos平台上共享一套代码库，这有助于减少代码冗余和维护成本。
++2. 高效的 I/O 操作：Okio 库使用 Segment 数据结构来存储数据，这种数据结构可以有效地避免内存的浪费和频繁的内存分配。
++3. 简洁易用的 API：KMM 版本的 Okio 库提供了一套简单易用的 API，使开发者可以很方便地进行 I/O 操作，如读取、写入文件，网络编程等。
++4. 同步和异步 I/O 支持：Okio 库支持同步和异步两种方式的 I/O 操作，可以满足不同的使用场景。
++5. 安全：Okio 库提供了一些安全措施，如对数据进行完整性校验，以防止数据被篡改。
++
++
++## 使用
++
++### 添加依赖
++
++```
++// 按照具体版本添加依赖
++implementation("com.squareup.okio:okio:3.9.10-KBA-001T")
++```
++
++### 文件读写
++
++不同端对应`sink`的创建方式不同，创建`sink`后的使用方式相同，鸿蒙端文件IO（其他端均可通过path创建`sink`，API相同）：
++
++```
++fun testWriteFile() {
++    val path = "/data/storage/el2/base/temptest.txt"
++
++    FileSystem.SYSTEM.sink(path.toPath()).buffer().use { sink ->
++            val value = random().toString()
++            sink.writeUtf8(value)
++            sink.writeUtf8("\n")
++        }
++    }
++}
+ 
+-See the [project website][okio] for documentation and APIs.
++fun testReadFile() {
++    val path = "/data/storage/el2/base/temptest.txt"
+ 
+-Okio is a library that complements `java.io` and `java.nio` to make it much
+-easier to access, store, and process your data. It started as a component of
+-[OkHttp][1], the capable HTTP client included in Android. It's well-exercised
+-and ready to solve new problems.
++    val fileSystem = FileSystem.SYSTEM
+ 
+-License
+---------
++    // 从文件路径创建 BufferedSource
++    val source = fileSystem.source(path.toPath()).buffer()
+ 
+-    Copyright 2013 Square, Inc.
++    try {
++        // 读取文件内容
++        val content = source.readUtf8()
++    } catch (e: IOException) {
++        // OH_LOG_Print(LOG_APP, LOG_DEBUG, 1u, "okio", "读取文件时发生错误: ${e.message}");
++    } finally {
++        // 关闭 BufferedSource
++        source.close()
++    }
++}
++```
+ 
+-    Licensed under the Apache License, Version 2.0 (the "License");
+-    you may not use this file except in compliance with the License.
+-    You may obtain a copy of the License at
+ 
+-       http://www.apache.org/licenses/LICENSE-2.0
++### 网络数据I/O
+ 
+-    Unless required by applicable law or agreed to in writing, software
+-    distributed under the License is distributed on an "AS IS" BASIS,
+-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-    See the License for the specific language governing permissions and
+-    limitations under the License.
+-    
+- [1]: https://github.com/square/okhttp
+- [okio]: https://square.github.io/okio/
++以`OkHttp `中数据解包为例：
++
++```
++import okhttp3.OkHttpClient
++import okhttp3.Request
++import okio.Buffer
++import okio.BufferedSource
++import okio.buffer
++
++fun main() {
++    val client = OkHttpClient()
++    val request = Request.Builder()
++        .url("https://api.example.com/data")
++        .build()
++
++    client.newCall(request).execute().use { response ->
++        if (response.isSuccessful) {
++            val responseBody = response.body ?: throw IllegalStateException("Response body is null")
++
++            val source: BufferedSource = responseBody.source().buffer()
++            val buffer = Buffer()
++
++            while (source.read(buffer, 1024) != -1L) {
++                val data = buffer.readUtf8()
++                println("Received data: $data")
++            }
++        } else {
++            throw IllegalStateException("Request failed with status code: ${response.code}")
++        }
++    }
++}
++
++```
++
++### 内存数据I/O
++
++Okio库提供了一个名为Buffer的类，用于在内存中高效地存储和操作数据。Buffer类是一个可扩展的字节缓冲区，它可以自动调整大小以适应数据量。
++
++```
++// 1 向缓冲区写入数据：
++val buffer = Buffer()
++buffer.writeUtf8("Hello, World!")
++
++// 2 从缓冲区读取数据
++val data = buffer.readUtf8()
++println("Data from buffer: $data")
++
++// 3 复制缓冲区
++val bufferCopy = Buffer()
++buffer.copyTo(bufferCopy)
++
++// 4 清空缓冲区
++buffer.clear()
++
++```
++
++
++### Zip Or Gzip
++
++[Gzip 使用和 unZip（暂不支持 zip)](./docs/GzipOrZip.md)
++
++## 注意事项
++
++1. 部分跨平台特性不支持，最新跨平台特性支持情况参考：[https://square.github.io/okio/multiplatform/](https://square.github.io/okio/multiplatform/)
++2. Kotlin版本仅验证**1.8.255-SNAPSHOT**，待后续升级
++3. 完整项目介绍参考：[https://square.github.io/okio/](https://square.github.io/okio/)
+Index: gradle/libs.versions.toml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/gradle/libs.versions.toml b/gradle/libs.versions.toml
+--- a/gradle/libs.versions.toml	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/gradle/libs.versions.toml	(date 1761566823601)
+@@ -1,26 +1,27 @@
+ [versions]
+ jmh = "1.37"
+-kotlin = "2.0.21"
++kotlin = "2.0.21-KBA-003"
+ ktlint = "0.48.2"
+ 
+ [libraries]
+-android-desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.2" }
+-android-gradle-plugin = { module = "com.android.tools.build:gradle", version = "8.7.1" }
+-androidx-test-ext-junit = { module = "androidx.test.ext:junit", version = "1.2.1" }
++android-gradle-plugin = { module = "com.android.tools.build:gradle", version = "8.1.0" }
++android-desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.0.4" }
++androidx-test-ext-junit = { module = "androidx.test.ext:junit", version = "1.1.5" }
+ androidx-test-runner = { module = "androidx.test:runner", version = "1.5.2" }
+-binaryCompatibilityValidator = { module = "org.jetbrains.kotlinx.binary-compatibility-validator:org.jetbrains.kotlinx.binary-compatibility-validator.gradle.plugin", version = "0.16.3" }
+-bnd = { module = "biz.aQute.bnd:biz.aQute.bnd.gradle", version = "7.0.0" }
++binaryCompatibilityValidator = { module = "org.jetbrains.kotlinx.binary-compatibility-validator:org.jetbrains.kotlinx.binary-compatibility-validator.gradle.plugin", version = "0.14.0" }
++bnd = { module = "biz.aQute.bnd:biz.aQute.bnd.gradle", version = "6.4.0" }
+ dokka = { module = "org.jetbrains.dokka:dokka-gradle-plugin", version = "1.9.20" }
+ jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+ jmh-generator = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+ jmh-gradle-plugin = { module = "me.champeau.jmh:jmh-gradle-plugin", version = "0.7.2" }
+ kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
++org-jetbrains-kotlin-multiplatform-gradle-plugin = { module = "org.jetbrains.kotlin.multiplatform:org.jetbrains.kotlin.multiplatform.gradle.plugin", version.ref = "kotlin" }
+ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test" }
+ kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit" }
+-kotlin-time = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version = "0.6.1" }
++kotlin-time = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version = "0.6.0-RC.2-KBA-001" }
+ spotless = { module = "com.diffplug.spotless:spotless-plugin-gradle", version = "6.25.0" }
+-test-assertj = { module = "org.assertj:assertj-core", version = "3.26.3" }
+-test-assertk = "com.willowtreeapps.assertk:assertk:0.28.1"
++test-assertj = { module = "org.assertj:assertj-core", version = "3.25.3" }
++test-assertk = "com.willowtreeapps.assertk:assertk:0.28.0"
+ test-jimfs = "com.google.jimfs:jimfs:1.3.0"
+ test-junit = { module = "junit:junit", version = "4.13.2" }
+-vanniktech-publish-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version = "0.30.0" }
++vanniktech-publish-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version = "0.27.0" }
+Index: build-support/src/main/kotlin/platforms.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build-support/src/main/kotlin/platforms.kt b/build-support/src/main/kotlin/platforms.kt
+--- a/build-support/src/main/kotlin/platforms.kt	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/build-support/src/main/kotlin/platforms.kt	(date 1761566823599)
+@@ -55,10 +55,11 @@
+   linuxArm64()
+   macosX64()
+   macosArm64()
+-  mingwX64()
++//  mingwX64()
++  ohosArm64()
+ }
+ 
+-val appleTargets = listOf(
++val appleTargets = listOf<String>(
+   "iosArm64",
+   "iosX64",
+   "iosSimulatorArm64",
+@@ -74,22 +75,27 @@
+   "watchosSimulatorArm64",
+ )
+ 
+-val mingwTargets = listOf(
+-  "mingwX64",
++val mingwTargets = listOf<String>(
++//  "mingwX64",
+ )
+ 
+-val linuxTargets = listOf(
++val linuxTargets = listOf<String>(
+   "linuxX64",
+   "linuxArm64",
+ )
+ 
+-val nativeTargets = appleTargets + linuxTargets + mingwTargets
++val ohosTargets = listOf(
++  "ohosArm64"
++)
+ 
+-val wasmTargets = listOf(
++val nativeTargets = appleTargets + linuxTargets + mingwTargets + ohosTargets
++
++val wasmTargets = listOf<String>(
+   "wasmJs",
+   "wasmWasi",
+ )
+ 
++
+ /**
+  * Creates a source set for a directory that isn't already a built-in platform. Use this to create
+  * custom shared directories like `nonJvmMain` or `unixMain`.
+Index: okio-bom/build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/okio-bom/build.gradle.kts b/okio-bom/build.gradle.kts
+--- a/okio-bom/build.gradle.kts	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/okio-bom/build.gradle.kts	(date 1761566823603)
+@@ -1,12 +1,12 @@
+ plugins {
+-  id("com.vanniktech.maven.publish.base")
++//  id("com.vanniktech.maven.publish.base")
+   id("java-platform")
+ }
+ 
+ collectBomConstraints()
+ 
+-extensions.configure<PublishingExtension> {
+-  publications.create("maven", MavenPublication::class) {
+-    from(project.components.getByName("javaPlatform"))
+-  }
+-}
++//extensions.configure<PublishingExtension> {
++//  publications.create("maven", MavenPublication::class) {
++//    from(project.components.getByName("javaPlatform"))
++//  }
++//}
+Index: gradle.properties
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>ISO-8859-1
+===================================================================
+diff --git a/gradle.properties b/gradle.properties
+--- a/gradle.properties	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/gradle.properties	(date 1761571343214)
+@@ -12,4 +12,9 @@
+ kotlin.mpp.stability.nowarn=true
+ 
+ GROUP=com.squareup.okio
+-VERSION_NAME=3.10.0-SNAPSHOT
++VERSION_NAME=3.9.10-KBA-001
++MAVEN_GROUP=com.squareup.okio
++MAVEN_TYPE=MAVEN_PUBLISH
++maven_publish_url=https://xxxx/repository/maven/xxx
++maven_username=user_A
++maven_password=password_A
+Index: okio/src/nonJvmMain/kotlin/okio/Sink.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/okio/src/nonJvmMain/kotlin/okio/Sink.kt b/okio/src/nonJvmMain/kotlin/okio/Sink.kt
+--- a/okio/src/nonJvmMain/kotlin/okio/Sink.kt	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/okio/src/nonJvmMain/kotlin/okio/Sink.kt	(date 1761556170267)
+@@ -15,8 +15,13 @@
+  */
+ package okio
+ 
++import kotlin.experimental.ExperimentalObjCRefinement
++import kotlin.native.HiddenFromObjC
++
+ actual interface Sink : Closeable {
+   @Throws(IOException::class)
++  @OptIn(ExperimentalObjCRefinement::class)
++  @HiddenFromObjC
+   actual fun write(source: Buffer, byteCount: Long)
+ 
+   @Throws(IOException::class)
+Index: okio/src/appleMain/kotlin/okio/ByteString.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/okio/src/appleMain/kotlin/okio/ByteString.kt b/okio/src/appleMain/kotlin/okio/ByteString.kt
+--- a/okio/src/appleMain/kotlin/okio/ByteString.kt	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/okio/src/appleMain/kotlin/okio/ByteString.kt	(date 1761556170266)
+@@ -17,6 +17,7 @@
+ package okio
+ 
+ import kotlin.experimental.ExperimentalNativeApi
++import kotlin.experimental.ExperimentalObjCRefinement
+ import kotlinx.cinterop.UnsafeNumber
+ import kotlinx.cinterop.addressOf
+ import kotlinx.cinterop.usePinned
+@@ -129,6 +130,8 @@
+   internal actual open fun write(buffer: Buffer, offset: Int, byteCount: Int) =
+     commonWrite(buffer, offset, byteCount)
+ 
++  @OptIn(ExperimentalObjCRefinement::class)
++  @HiddenFromObjC
+   actual open fun rangeEquals(
+     offset: Int,
+     other: ByteString,
+@@ -150,18 +153,26 @@
+     byteCount: Int,
+   ) = commonCopyInto(offset, target, targetOffset, byteCount)
+ 
++  @OptIn(ExperimentalObjCRefinement::class)
++  @HiddenFromObjC
+   actual fun startsWith(prefix: ByteString) = commonStartsWith(prefix)
+ 
+   actual fun startsWith(prefix: ByteArray) = commonStartsWith(prefix)
+ 
++  @OptIn(ExperimentalObjCRefinement::class)
++  @HiddenFromObjC
+   actual fun endsWith(suffix: ByteString) = commonEndsWith(suffix)
+ 
+   actual fun endsWith(suffix: ByteArray) = commonEndsWith(suffix)
+ 
++  @OptIn(ExperimentalObjCRefinement::class)
++  @HiddenFromObjC
+   actual fun indexOf(other: ByteString, fromIndex: Int) = indexOf(other.internalArray(), fromIndex)
+ 
+   actual open fun indexOf(other: ByteArray, fromIndex: Int) = commonIndexOf(other, fromIndex)
+ 
++  @OptIn(ExperimentalObjCRefinement::class)
++  @HiddenFromObjC
+   actual fun lastIndexOf(other: ByteString, fromIndex: Int) = commonLastIndexOf(other, fromIndex)
+ 
+   actual open fun lastIndexOf(other: ByteArray, fromIndex: Int) = commonLastIndexOf(other, fromIndex)
+Index: .gitignore
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.gitignore b/.gitignore
+--- a/.gitignore	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/.gitignore	(date 1761566823598)
+@@ -29,3 +29,6 @@
+ docs/3.x
+ docs/changelog.md
+ docs/contributing.md
++
++/autopushremote/*
++.kotlin
+Index: okio/src/nonJvmMain/kotlin/okio/BufferedSource.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/okio/src/nonJvmMain/kotlin/okio/BufferedSource.kt b/okio/src/nonJvmMain/kotlin/okio/BufferedSource.kt
+--- a/okio/src/nonJvmMain/kotlin/okio/BufferedSource.kt	(revision 6e624151edd1425acb3312e197159860fa4e4669)
++++ b/okio/src/nonJvmMain/kotlin/okio/BufferedSource.kt	(date 1761566797827)
+@@ -15,6 +15,9 @@
+  */
+ package okio
+ 
++import kotlin.experimental.ExperimentalObjCRefinement
++import kotlin.native.HiddenFromObjC
++
+ actual sealed interface BufferedSource : Source {
+   actual val buffer: Buffer
+ 
+@@ -50,6 +53,8 @@
+ 
+   actual fun select(options: Options): Int
+ 
++  @OptIn(ExperimentalObjCRefinement::class)
++  @HiddenFromObjC
+   actual fun <T : Any> select(options: TypedOptions<T>): T?
+ 
+   actual fun readByteArray(): ByteArray

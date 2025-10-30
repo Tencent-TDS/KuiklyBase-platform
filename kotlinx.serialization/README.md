@@ -1,6 +1,6 @@
 # kotlinx.serialization
 
-This patch is built on the official kotlinx.serialization version 1.7.1 to support platform OpenHarmony。
+This patch is built on the official kotlinx.serialization version 4c112bf1 to support platform OpenHarmony。
 
 # How to publish 
 
@@ -11,10 +11,10 @@ At first, clone offcial kotlin.serialization project in local:
 git clone https://github.com/Kotlin/kotlinx.serialization.git
 ```
 
-checkout tag 1.7.1 and create branch:
+checkout commit 4c112bf1 and create branch:
 
 ```
-git checkout -b v1.7.1. 1.7.1.
+git checkout -b v1.7.1. 4c112bf1.
 ```
 
 ## 2. apply patch
@@ -57,7 +57,7 @@ after gradle sync, enter kotlinx.serialization project' root path, execute `publ
 import kotlinx.serialization in `libs.version.toml`
 
 ```
-serializationVersion = "xxxx"
+serializationVersion = "1.7.1-KBA-003"
 
 lib-kotlin-serialization = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationVersion" }
 ```

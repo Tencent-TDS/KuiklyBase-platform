@@ -16,8 +16,9 @@ KuiklyBase是腾讯大前端Oteam推出，由腾讯视频、PCG端技术深度�
 | [coroutines](https://github.com/Kotlin/kotlinx.coroutines) | 1.8.0 | 已开源 | [查看详情](kotlinx.coroutines/README.md) |
 | [JetBrains Skia](https://github.com/JetBrains/skia-pack) | m116-47d3027-1 | 已开源 | [查看详情](skia/README.md)  |
 | [skiko](https://github.com/JetBrains/skiko) | 0.7.97 | 已开源 | [查看详情](skiko/README.md) |
-| serialization | / | 待定 | / |
-| datetime | / | 待定 | / |
+| [serialization](https://github.com/Kotlin/kotlinx.serialization)            | 1.7.1-KBA-002 | 已开源 | [查看详情](kotlinx.serialization/README.md) |
+| [datetime](https://github.com/Kotlin/kotlinx-datetime)                      | 0.6.0-RC.2-KBA-001              | 已开源 | [查看详情](kotlinx.datetime/README.md)      |
+| [okio](https://github.com/square/okio)                          | 3.9.10-KBA-001              | 已开源 | [查看详情](okio/README.md)   
 
 ## License
 KuiklyBase-platform 基于 Apache 2.0 协议发布，详见：[License](License)
