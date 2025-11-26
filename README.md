@@ -16,7 +16,7 @@ KuiklyBase is developed and open - sourced by the Oteam of Tencent's large front
 | [coroutines](https://github.com/Kotlin/kotlinx.coroutines)                  | 1.8.0         | Released | [See details](kotlinx.coroutines/README.md)    |
 | [JetBrains Skia](https://github.com/JetBrains/skia-pack)                    | m116-47d3027-1 | Released | [See details](skia/README.md)                  |
 | [skiko](https://github.com/JetBrains/skiko)                                 | 0.7.97        | Released | [See details](skiko/README.md)                 |
-| [serialization](https://github.com/Kotlin/kotlinx.serialization)            | 1.7.1-KBA-002 | Released | [See details](kotlinx.serialization/README.md) |
+| [serialization](https://github.com/Kotlin/kotlinx.serialization)            | 1.7.1-KBA-003 | Released | [See details](kotlinx.serialization/README.md) |
 | [datetime](https://github.com/Kotlin/kotlinx-datetime)                      | 0.6.0-RC.2-KBA-001              | Released | [See details](kotlinx.datetime/README.md)      |
 | [okio](https://github.com/square/okio)                          | 3.9.10-KBA-001              | Released | [See details](okio/README.md)                  |
 
