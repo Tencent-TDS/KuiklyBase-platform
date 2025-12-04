@@ -11,10 +11,10 @@ At first, clone offcial kotlin.serialization project in local:
 git clone https://github.com/Kotlin/kotlinx.serialization.git
 ```
 
-checkout commit 4c112bf1 and create branch:
+checkout commit d2f7316e and create branch:
 
 ```
-git checkout -b v1.7.1. 4c112bf1.
+git checkout -b v1.7.1. d2f7316e.
 ```
 
 ## 2. apply patch
