@@ -8,7 +8,7 @@ This patch is built on the official okio version c43c9a61 to support platform Op
 At first, clone offcial okio project in local:
 
 ```
-git clone https://github.com/Kotlin/okio.git
+git clone https://github.com/square/okio
 ```
 
 checkout tag c43c9a61 and create branch:
