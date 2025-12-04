@@ -8,13 +8,13 @@ This patch is built on the official kotlinx.datetime version 0.6.0-RC.2 to suppo
 At first, clone offcial kotlin.datetime project in local:
 
 ```
-git clone https://github.com/Kotlin/kotlinx.datetime.git
+git clone https://github.com/Kotlin/kotlinx-datetime.git
 ```
 
 checkout tag 0.6.0-RC.2 and create branch:
 
 ```
-git checkout -b v0.6.0-RC.2 0.6.0-RC.2
+git checkout -b v0.6.0-RC.2 v0.6.0-RC.2
 ```
 
 ## 2. apply patch
