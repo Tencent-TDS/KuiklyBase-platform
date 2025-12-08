@@ -19,10 +19,10 @@ git checkout -b v0.6.0-RC.2 v0.6.0-RC.2
 
 ## 2. apply patch
 
-download all patches to local directory, and apply it:
+download patch to local directory, and apply it:
 
 ```
-git am *.patch
+git apply kotlinx-datetime.patch
 ```
 
 ## 3. maven configuration
