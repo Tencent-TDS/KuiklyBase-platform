@@ -19,10 +19,10 @@ git checkout -b v0.6.0-RC.2 v0.6.0-RC.2
 
 ## 2. apply patch
 
-download patch to local, and apply it:
+download all patches to local directory, and apply it:
 
 ```
-git apply kotlinx-datetime.patch
+git am *.patch
 ```
 
 ## 3. maven configuration
@@ -52,7 +52,7 @@ after gradle sync, enter kotlinx.datetime project' root path, execute `publish` 
 import kotlinx.datetime in `libs.version.toml`
 
 ```
-datetimeVersion = "0.6.0-RC.2-KBA-001"
+datetimeVersion = "0.6.0-RC.2-KBA-002"
 
 lib-kotlin-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "datetimeVersion" }
 ```

@@ -1,0 +1,760 @@
+From ec00b37b8e3021863a58a687801e6edb0d21eace Mon Sep 17 00:00:00 2001
+From: qizhengchen <qizhengchen@tencent.com>
+Date: Fri, 14 Nov 2025 07:55:35 +0000
+Subject: [PATCH 2/2] =?UTF-8?q?bump=20version=20to=200.6.0-RC.2-KBA-002:fi?=
+ =?UTF-8?q?x=20compilation=20issue=EF=BC=8Cremove=20knoi=20dependencies?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ core/build.gradle.kts                         |  20 +-
+ core/ohosArm64Main/src/TimeZone.kt            |  13 +
+ .../src/internal/TimeZoneManager.kt           | 119 -----
+ .../src/internal/TimeZoneNative.kt            |  31 --
+ .../datetime/internal/TimeZoneNative.kt       | 505 ++++++++++++++++++
+ 5 files changed, 519 insertions(+), 169 deletions(-)
+ create mode 100644 core/ohosArm64Main/src/TimeZone.kt
+ delete mode 100644 core/ohosArm64Main/src/internal/TimeZoneManager.kt
+ delete mode 100644 core/ohosArm64Main/src/internal/TimeZoneNative.kt
+ create mode 100644 core/ohosArm64Main/src/kotlinx/datetime/internal/TimeZoneNative.kt
+
+diff --git a/core/build.gradle.kts b/core/build.gradle.kts
+index 7d3aab7..4ef617e 100644
+--- a/core/build.gradle.kts
++++ b/core/build.gradle.kts
+@@ -17,7 +17,7 @@ plugins {
+ }
+ //发布组件名称和版本号
+ group = project.properties["MAVEN_GROUP"]!!
+-version = "0.6.0-RC.2-KBA-001"
++version = "0.6.0-RC.2-KBA-002"
+ 
+ //支持本地发布release版本
+ publishing {
+@@ -271,27 +271,9 @@ kotlin {
+         val ohosArm64Main by getting {
+             kotlin.srcDir(projectDir.absolutePath + "/ohosArm64Main/src")
+             dependsOn(nativeMain)
+-            dependencies {
+-                api("com.tencent.kuiklybase:knoi-annotation:0.0.4")
+-                api("com.tencent.kuiklybase:knoi:0.0.4")
+-                api("org.jetbrains.kotlinx:atomicfu:0.23.2-KBA-001")
+-            }
+         }
+     }
+ }
+-ksp {
+-    arg("CONFIG_FILE", getKNOIConfigPath(project))
+-}
+-
+-dependencies {
+-    add("kspOhosArm64", "com.tencent.kuiklybase:knoi-processor:0.0.4")
+-}
+-
+-val Project.projectCacheDir
+-    get() = project.gradle.startParameter.projectCacheDir
+-        ?: this.rootProject.projectDir.resolve(".gradle")
+-fun getKNOIConfigPath(project: Project) =
+-    "${project.projectCacheDir}/knoi/${project.name}-config.ini"
+ 
+ //android {
+ //    namespace = "com.tencent.kmm.component.kotlinx-datetime"
+diff --git a/core/ohosArm64Main/src/TimeZone.kt b/core/ohosArm64Main/src/TimeZone.kt
+new file mode 100644
+index 0000000..73abdf2
+--- /dev/null
++++ b/core/ohosArm64Main/src/TimeZone.kt
+@@ -0,0 +1,13 @@
++package kotlinx.datetime.api
++
++private var systemDefaultZoneProvider: () -> String = {
++    "Asia/Shanghai"
++}
++
++internal fun getSystemDefaultZone(): String {
++    return systemDefaultZoneProvider()
++}
++
++public fun injectSystemDefaultZone(provider: () -> String) {
++    systemDefaultZoneProvider = provider
++}
+\ No newline at end of file
+diff --git a/core/ohosArm64Main/src/internal/TimeZoneManager.kt b/core/ohosArm64Main/src/internal/TimeZoneManager.kt
+deleted file mode 100644
+index 58eea46..0000000
+--- a/core/ohosArm64Main/src/internal/TimeZoneManager.kt
++++ /dev/null
+@@ -1,119 +0,0 @@
+-/*
+- * Tencent is pleased to support the open source community by making KuiklyBase available.
+- * Copyright (C) 2025 Tencent. All rights reserved.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package kotlinx.datetime.internal
+-
+-import com.tencent.tmm.knoi.annotation.ServiceConsumer
+-import com.tencent.tmm.knoi.type.JSValue
+-import com.tencent.tmm.knoi.module.loadModuleToJSValueWithInfo
+-import kotlinx.datetime.KMMDateTimeLog
+-import kotlinx.atomicfu.atomic
+-import kotlinx.atomicfu.update
+-import kotlinx.atomicfu.updateAndGet
+-
+-/**
+- * Copyright (c) 2025 Tencent. All rights reserved.
+- *
+- * @Author : woodyjjli
+- * @date : 2025/9/24
+- */
+-
+-@ServiceConsumer
+-public interface TimeZoneManagerService {
+-
+-    public fun getTimeZone(id: String?): JSValue
+-
+-    public fun getAvailableIDs(): List<String>
+-
+-    public fun setTimeZoneChangeCallback(callback: () -> Unit)
+-}
+-
+-
+-internal object TimeZoneManager {
+-    private val delegate = TimeZoneManagerDelegate()
+-    // Stately系列未开源，先用atomic来实现线程安全的map
+-    private val timeZoneCache = atomic<Map<String, TMMTimeZone>>(emptyMap())
+-    private var defaultTimeZoneCache: TMMTimeZone? = null
+-    private var availableIdsCache: Array<String>? = null
+-
+-    fun getTimeZone(id: String): TMMTimeZone {
+-        return timeZoneCache.updateAndGet { currentCache ->
+-            if (id in currentCache) {
+-                currentCache
+-            } else {
+-                currentCache + (id to delegate.getTimeZone(id))
+-            }
+-        }[id] ?: getDefaultTimeZone()
+-    }
+-
+-    fun getDefaultTimeZone(): TMMTimeZone {
+-        return defaultTimeZoneCache ?: delegate.getDefaultTimeZone()
+-            .also { defaultTimeZoneCache = it }
+-    }
+-
+-    fun getAvailableIDs(): Array<String> {
+-        return availableIdsCache ?: delegate.getAvailableIDs()
+-            .also { availableIdsCache = it }
+-    }
+-
+-    // 时区变化时主动通知缓存作废
+-    fun clearCache() {
+-        KMMDateTimeLog.i("[TimeZone]","clearCache")
+-        timeZoneCache.update {
+-            emptyMap()
+-        }
+-        defaultTimeZoneCache = null
+-        availableIdsCache = null
+-    }
+-}
+-
+-internal class TimeZoneManagerDelegate() {
+-
+-    init {
+-        // 注册时区变化回调
+-        getTimeZoneManagerServiceApi().setTimeZoneChangeCallback{
+-            TimeZoneManager.clearCache()
+-        }
+-    }
+-
+-    private fun transformJSValueToTimeZone(jsValue: JSValue): TMMTimeZone {
+-        val id = jsValue["id"]?.toKString() ?: ""
+-        val displayName = jsValue["displayName"]?.toKString() ?: ""
+-        val rawOffset = jsValue["rawOffset"]?.toInt() ?: 0
+-        return TMMTimeZone(id, displayName, rawOffset)
+-    }
+-
+-    fun getTimeZone(id: String): TMMTimeZone {
+-        val jsValue = getTimeZoneManagerServiceApi().getTimeZone(id)
+-        return transformJSValueToTimeZone(jsValue)
+-    }
+-
+-    fun getDefaultTimeZone(): TMMTimeZone {
+-        val jsValue = getTimeZoneManagerServiceApi().getTimeZone(null)
+-        return transformJSValueToTimeZone(jsValue)
+-    }
+-
+-    fun getAvailableIDs(): Array<String> {
+-        return getTimeZoneManagerServiceApi().getAvailableIDs().toTypedArray()
+-    }
+-
+-}
+-
+-internal data class TMMTimeZone(val id: String, val displayName: String, val rawOffset: Int) {
+-    override fun toString(): String {
+-        return "TMMTimeZone(id='$id', displayName='$displayName', rawOffset=$rawOffset)"
+-    }
+-}
+diff --git a/core/ohosArm64Main/src/internal/TimeZoneNative.kt b/core/ohosArm64Main/src/internal/TimeZoneNative.kt
+deleted file mode 100644
+index 2c60825..0000000
+--- a/core/ohosArm64Main/src/internal/TimeZoneNative.kt
++++ /dev/null
+@@ -1,31 +0,0 @@
+-package kotlinx.datetime.internal
+-
+-import kotlinx.datetime.UtcOffset
+-
+-
+-/***
+- * 通过 knoi 桥接回 ArkTS 获取时区实现
+- * 后续 HuaWei 提供 Native 接口可替换会 Native 实现
+- */
+-internal actual val systemTzdb: TimeZoneDatabase get() = tzdb.getOrThrow()
+-
+-private val tzdb = runCatching {
+-    OhosTimeZoneDatabase()
+-}
+-
+-internal actual fun currentSystemDefaultZone(): Pair<String, TimeZoneRules?> {
+-    val zone = TimeZoneManager.getDefaultTimeZone()
+-    zone.rawOffset
+-    val rules = TimeZoneRules(emptyList(), listOf(UtcOffset(seconds = zone.rawOffset / 1000)), null)
+-    return zone.id to rules
+-}
+-
+-internal class OhosTimeZoneDatabase : TimeZoneDatabase {
+-    override fun rulesForId(id: String): TimeZoneRules {
+-        val zone = TimeZoneManager.getTimeZone(id)
+-        return TimeZoneRules(emptyList(), listOf(UtcOffset(seconds = zone.rawOffset / 1000)), null)
+-    }
+-
+-    override fun availableTimeZoneIds(): Set<String> = TimeZoneManager.getAvailableIDs().toSet()
+-
+-}
+\ No newline at end of file
+diff --git a/core/ohosArm64Main/src/kotlinx/datetime/internal/TimeZoneNative.kt b/core/ohosArm64Main/src/kotlinx/datetime/internal/TimeZoneNative.kt
+new file mode 100644
+index 0000000..a1ebdb2
+--- /dev/null
++++ b/core/ohosArm64Main/src/kotlinx/datetime/internal/TimeZoneNative.kt
+@@ -0,0 +1,505 @@
++package kotlinx.datetime.internal
++
++import kotlinx.datetime.UtcOffset
++import kotlinx.datetime.api.getSystemDefaultZone
++
++private val timezoneToOffset = mapOf(
++    "Africa/Abidjan" to 0,
++    "Africa/Accra" to 0,
++    "Africa/Addis_Ababa" to 10800000,
++    "Africa/Algiers" to 3600000,
++    "Africa/Asmara" to 10800000,
++    "Africa/Bamako" to 0,
++    "Africa/Bangui" to 3600000,
++    "Africa/Banjul" to 0,
++    "Africa/Bissau" to 0,
++    "Africa/Blantyre" to 7200000,
++    "Africa/Brazzaville" to 3600000,
++    "Africa/Bujumbura" to 7200000,
++    "Africa/Cairo" to 7200000,
++    "Africa/Casablanca" to 0,
++    "Africa/Ceuta" to 3600000,
++    "Africa/Conakry" to 0,
++    "Africa/Dakar" to 0,
++    "Africa/Dar_es_Salaam" to 10800000,
++    "Africa/Djibouti" to 10800000,
++    "Africa/Douala" to 3600000,
++    "Africa/El_Aaiun" to 0,
++    "Africa/Freetown" to 0,
++    "Africa/Gaborone" to 7200000,
++    "Africa/Harare" to 7200000,
++    "Africa/Johannesburg" to 7200000,
++    "Africa/Juba" to 7200000,
++    "Africa/Kampala" to 10800000,
++    "Africa/Khartoum" to 7200000,
++    "Africa/Kigali" to 7200000,
++    "Africa/Kinshasa" to 3600000,
++    "Africa/Lagos" to 3600000,
++    "Africa/Libreville" to 3600000,
++    "Africa/Lome" to 0,
++    "Africa/Luanda" to 3600000,
++    "Africa/Lubumbashi" to 7200000,
++    "Africa/Lusaka" to 7200000,
++    "Africa/Malabo" to 3600000,
++    "Africa/Maputo" to 7200000,
++    "Africa/Maseru" to 7200000,
++    "Africa/Mbabane" to 7200000,
++    "Africa/Mogadishu" to 10800000,
++    "Africa/Monrovia" to 0,
++    "Africa/Nairobi" to 10800000,
++    "Africa/Ndjamena" to 3600000,
++    "Africa/Niamey" to 3600000,
++    "Africa/Nouakchott" to 0,
++    "Africa/Ouagadougou" to 0,
++    "Africa/Porto-Novo" to 3600000,
++    "Africa/Sao_Tome" to 0,
++    "Africa/Tripoli" to 7200000,
++    "Africa/Tunis" to 3600000,
++    "Africa/Windhoek" to 7200000,
++    "America/Adak" to -36000000,
++    "America/Anchorage" to -32400000,
++    "America/Anguilla" to -14400000,
++    "America/Antigua" to -14400000,
++    "America/Araguaina" to -10800000,
++    "America/Argentina/Buenos_Aires" to -10800000,
++    "America/Argentina/Catamarca" to -10800000,
++    "America/Argentina/Cordoba" to -10800000,
++    "America/Argentina/Jujuy" to -10800000,
++    "America/Argentina/La_Rioja" to -10800000,
++    "America/Argentina/Mendoza" to -10800000,
++    "America/Argentina/Rio_Gallegos" to -10800000,
++    "America/Argentina/Salta" to -10800000,
++    "America/Argentina/San_Juan" to -10800000,
++    "America/Argentina/San_Luis" to -10800000,
++    "America/Argentina/Tucuman" to -10800000,
++    "America/Argentina/Ushuaia" to -10800000,
++    "America/Aruba" to -14400000,
++    "America/Asuncion" to -10800000,
++    "America/Atikokan" to -18000000,
++    "America/Bahia" to -10800000,
++    "America/Bahia_Banderas" to -21600000,
++    "America/Barbados" to -14400000,
++    "America/Belem" to -10800000,
++    "America/Belize" to -21600000,
++    "America/Blanc-Sablon" to -14400000,
++    "America/Boa_Vista" to -14400000,
++    "America/Bogota" to -18000000,
++    "America/Boise" to -25200000,
++    "America/Cambridge_Bay" to -25200000,
++    "America/Campo_Grande" to -14400000,
++    "America/Cancun" to -18000000,
++    "America/Caracas" to -14400000,
++    "America/Cayenne" to -10800000,
++    "America/Cayman" to -18000000,
++    "America/Chicago" to -21600000,
++    "America/Chihuahua" to -21600000,
++    "America/Ciudad_Juarez" to -25200000,
++    "America/Costa_Rica" to -21600000,
++    "America/Coyhaique" to -10800000,
++    "America/Creston" to -25200000,
++    "America/Cuiaba" to -14400000,
++    "America/Curacao" to -14400000,
++    "America/Danmarkshavn" to 0,
++    "America/Dawson" to -25200000,
++    "America/Dawson_Creek" to -25200000,
++    "America/Denver" to -25200000,
++    "America/Detroit" to -18000000,
++    "America/Dominica" to -14400000,
++    "America/Edmonton" to -25200000,
++    "America/Eirunepe" to -18000000,
++    "America/El_Salvador" to -21600000,
++    "America/Fort_Nelson" to -25200000,
++    "America/Fortaleza" to -10800000,
++    "America/Glace_Bay" to -14400000,
++    "America/Godthab" to -7200000,
++    "America/Goose_Bay" to -14400000,
++    "America/Grand_Turk" to -18000000,
++    "America/Grenada" to -14400000,
++    "America/Guadeloupe" to -14400000,
++    "America/Guatemala" to -21600000,
++    "America/Guayaquil" to -18000000,
++    "America/Guyana" to -14400000,
++    "America/Halifax" to -14400000,
++    "America/Havana" to -18000000,
++    "America/Hermosillo" to -25200000,
++    "America/Indiana/Indianapolis" to -18000000,
++    "America/Indiana/Knox" to -21600000,
++    "America/Indiana/Marengo" to -18000000,
++    "America/Indiana/Petersburg" to -18000000,
++    "America/Indiana/Tell_City" to -21600000,
++    "America/Indiana/Vevay" to -18000000,
++    "America/Indiana/Vincennes" to -18000000,
++    "America/Indiana/Winamac" to -18000000,
++    "America/Inuvik" to -25200000,
++    "America/Iqaluit" to -18000000,
++    "America/Jamaica" to -18000000,
++    "America/Juneau" to -32400000,
++    "America/Kentucky/Louisville" to -18000000,
++    "America/Kentucky/Monticello" to -18000000,
++    "America/Kralendijk" to -14400000,
++    "America/La_Paz" to -14400000,
++    "America/Lima" to -18000000,
++    "America/Los_Angeles" to -28800000,
++    "America/Louisville" to -18000000,
++    "America/Lower_Princes" to -14400000,
++    "America/Maceio" to -10800000,
++    "America/Managua" to -21600000,
++    "America/Manaus" to -14400000,
++    "America/Marigot" to -14400000,
++    "America/Martinique" to -14400000,
++    "America/Matamoros" to -21600000,
++    "America/Mazatlan" to -25200000,
++    "America/Menominee" to -21600000,
++    "America/Merida" to -21600000,
++    "America/Metlakatla" to -32400000,
++    "America/Mexico_City" to -21600000,
++    "America/Miquelon" to -10800000,
++    "America/Moncton" to -14400000,
++    "America/Monterrey" to -21600000,
++    "America/Montevideo" to -10800000,
++    "America/Montserrat" to -14400000,
++    "America/Nassau" to -18000000,
++    "America/New_York" to -18000000,
++    "America/Nipigon" to -18000000,
++    "America/Nome" to -32400000,
++    "America/Noronha" to -7200000,
++    "America/North_Dakota/Beulah" to -21600000,
++    "America/North_Dakota/Center" to -21600000,
++    "America/North_Dakota/New_Salem" to -21600000,
++    "America/Nuuk" to -7200000,
++    "America/Ojinaga" to -21600000,
++    "America/Panama" to -18000000,
++    "America/Pangnirtung" to -18000000,
++    "America/Paramaribo" to -10800000,
++    "America/Phoenix" to -25200000,
++    "America/Port-au-Prince" to -18000000,
++    "America/Port_of_Spain" to -14400000,
++    "America/Porto_Velho" to -14400000,
++    "America/Puerto_Rico" to -14400000,
++    "America/Punta_Arenas" to -10800000,
++    "America/Rainy_River" to -21600000,
++    "America/Rankin_Inlet" to -21600000,
++    "America/Recife" to -10800000,
++    "America/Regina" to -21600000,
++    "America/Resolute" to -21600000,
++    "America/Rio_Branco" to -18000000,
++    "America/Santarem" to -10800000,
++    "America/Santiago" to -14400000,
++    "America/Santo_Domingo" to -14400000,
++    "America/Sao_Paulo" to -10800000,
++    "America/Scoresbysund" to -7200000,
++    "America/Sitka" to -32400000,
++    "America/St_Barthelemy" to -14400000,
++    "America/St_Johns" to -12600000,
++    "America/St_Kitts" to -14400000,
++    "America/St_Lucia" to -14400000,
++    "America/St_Thomas" to -14400000,
++    "America/St_Vincent" to -14400000,
++    "America/Swift_Current" to -21600000,
++    "America/Tegucigalpa" to -21600000,
++    "America/Thule" to -14400000,
++    "America/Thunder_Bay" to -18000000,
++    "America/Tijuana" to -28800000,
++    "America/Toronto" to -18000000,
++    "America/Tortola" to -14400000,
++    "America/Vancouver" to -28800000,
++    "America/Whitehorse" to -25200000,
++    "America/Winnipeg" to -21600000,
++    "America/Yakutat" to -32400000,
++    "America/Yellowknife" to -25200000,
++    "Antarctica/Casey" to 28800000,
++    "Antarctica/Davis" to 25200000,
++    "Antarctica/DumontDUrville" to 36000000,
++    "Antarctica/Macquarie" to 36000000,
++    "Antarctica/Mawson" to 18000000,
++    "Antarctica/McMurdo" to 43200000,
++    "Antarctica/Palmer" to -10800000,
++    "Antarctica/Rothera" to -10800000,
++    "Antarctica/Syowa" to 10800000,
++    "Antarctica/Troll" to 0,
++    "Antarctica/Vostok" to 18000000,
++    "Arctic/Longyearbyen" to 3600000,
++    "Asia/Aden" to 10800000,
++    "Asia/Almaty" to 18000000,
++    "Asia/Amman" to 10800000,
++    "Asia/Anadyr" to 43200000,
++    "Asia/Aqtau" to 18000000,
++    "Asia/Aqtobe" to 18000000,
++    "Asia/Ashgabat" to 18000000,
++    "Asia/Atyrau" to 18000000,
++    "Asia/Baghdad" to 10800000,
++    "Asia/Bahrain" to 10800000,
++    "Asia/Baku" to 14400000,
++    "Asia/Bangkok" to 25200000,
++    "Asia/Barnaul" to 25200000,
++    "Asia/Beirut" to 7200000,
++    "Asia/Bishkek" to 21600000,
++    "Asia/Brunei" to 28800000,
++    "Asia/Chita" to 32400000,
++    "Asia/Choibalsan" to 28800000,
++    "Asia/Colombo" to 19800000,
++    "Asia/Damascus" to 10800000,
++    "Asia/Dhaka" to 21600000,
++    "Asia/Dili" to 32400000,
++    "Asia/Dubai" to 14400000,
++    "Asia/Dushanbe" to 18000000,
++    "Asia/Famagusta" to 7200000,
++    "Asia/Gaza" to 7200000,
++    "Asia/Hebron" to 7200000,
++    "Asia/Ho_Chi_Minh" to 25200000,
++    "Asia/Hong_Kong" to 28800000,
++    "Asia/Hovd" to 25200000,
++    "Asia/Irkutsk" to 28800000,
++    "Asia/Istanbul" to 10800000,
++    "Asia/Jakarta" to 25200000,
++    "Asia/Jayapura" to 32400000,
++    "Asia/Jerusalem" to 7200000,
++    "Asia/Kabul" to 16200000,
++    "Asia/Kamchatka" to 43200000,
++    "Asia/Karachi" to 18000000,
++    "Asia/Kathmandu" to 20700000,
++    "Asia/Khandyga" to 32400000,
++    "Asia/Kolkata" to 19800000,
++    "Asia/Krasnoyarsk" to 25200000,
++    "Asia/Kuala_Lumpur" to 28800000,
++    "Asia/Kuching" to 28800000,
++    "Asia/Kuwait" to 10800000,
++    "Asia/Macau" to 28800000,
++    "Asia/Magadan" to 39600000,
++    "Asia/Makassar" to 28800000,
++    "Asia/Manila" to 28800000,
++    "Asia/Muscat" to 14400000,
++    "Asia/Nicosia" to 7200000,
++    "Asia/Novokuznetsk" to 25200000,
++    "Asia/Novosibirsk" to 25200000,
++    "Asia/Omsk" to 21600000,
++    "Asia/Oral" to 18000000,
++    "Asia/Phnom_Penh" to 25200000,
++    "Asia/Pontianak" to 25200000,
++    "Asia/Pyongyang" to 32400000,
++    "Asia/Qatar" to 10800000,
++    "Asia/Qostanay" to 18000000,
++    "Asia/Qyzylorda" to 18000000,
++    "Asia/Rangoon" to 23400000,
++    "Asia/Riyadh" to 10800000,
++    "Asia/Sakhalin" to 39600000,
++    "Asia/Samarkand" to 18000000,
++    "Asia/Seoul" to 32400000,
++    "Asia/Shanghai" to 28800000,
++    "Asia/Singapore" to 28800000,
++    "Asia/Srednekolymsk" to 39600000,
++    "Asia/Taipei" to 28800000,
++    "Asia/Tashkent" to 18000000,
++    "Asia/Tbilisi" to 14400000,
++    "Asia/Tehran" to 12600000,
++    "Asia/Thimbu" to 21600000,
++    "Asia/Thimphu" to 21600000,
++    "Asia/Tokyo" to 32400000,
++    "Asia/Tomsk" to 25200000,
++    "Asia/Ulaanbaatar" to 28800000,
++    "Asia/Urumqi" to 21600000,
++    "Asia/Ust-Nera" to 36000000,
++    "Asia/Vientiane" to 25200000,
++    "Asia/Vladivostok" to 36000000,
++    "Asia/Yakutsk" to 32400000,
++    "Asia/Yangon" to 23400000,
++    "Asia/Yekaterinburg" to 18000000,
++    "Asia/Yerevan" to 14400000,
++    "Atlantic/Azores" to -3600000,
++    "Atlantic/Bermuda" to -14400000,
++    "Atlantic/Canary" to 0,
++    "Atlantic/Cape_Verde" to -3600000,
++    "Atlantic/Faroe" to 0,
++    "Atlantic/Madeira" to 0,
++    "Atlantic/Reykjavik" to 0,
++    "Atlantic/South_Georgia" to -7200000,
++    "Atlantic/St_Helena" to 0,
++    "Atlantic/Stanley" to -10800000,
++    "Australia/Adelaide" to 34200000,
++    "Australia/Brisbane" to 36000000,
++    "Australia/Broken_Hill" to 34200000,
++    "Australia/Darwin" to 34200000,
++    "Australia/Eucla" to 31500000,
++    "Australia/Hobart" to 36000000,
++    "Australia/Lindeman" to 36000000,
++    "Australia/Lord_Howe" to 37800000,
++    "Australia/Melbourne" to 36000000,
++    "Australia/Perth" to 28800000,
++    "Australia/Sydney" to 36000000,
++    "Brazil/DeNoronha" to -7200000,
++    "CET" to 3600000,
++    "CST6CDT" to -21600000,
++    "EET" to 7200000,
++    "EST" to -18000000,
++    "EST5EDT" to -18000000,
++    "Etc/GMT" to 0,
++    "Etc/GMT+1" to -3600000,
++    "Etc/GMT+10" to -36000000,
++    "Etc/GMT+11" to -39600000,
++    "Etc/GMT+12" to -43200000,
++    "Etc/GMT+2" to -7200000,
++    "Etc/GMT+3" to -10800000,
++    "Etc/GMT+4" to -14400000,
++    "Etc/GMT+5" to -18000000,
++    "Etc/GMT+6" to -21600000,
++    "Etc/GMT+7" to -25200000,
++    "Etc/GMT+8" to -28800000,
++    "Etc/GMT+9" to -32400000,
++    "Etc/GMT-1" to 3600000,
++    "Etc/GMT-10" to 36000000,
++    "Etc/GMT-11" to 39600000,
++    "Etc/GMT-12" to 43200000,
++    "Etc/GMT-2" to 7200000,
++    "Etc/GMT-3" to 10800000,
++    "Etc/GMT-4" to 14400000,
++    "Etc/GMT-5" to 18000000,
++    "Etc/GMT-6" to 21600000,
++    "Etc/GMT-7" to 25200000,
++    "Etc/GMT-8" to 28800000,
++    "Etc/GMT-9" to 32400000,
++    "Etc/UTC" to 0,
++    "Europe/Amsterdam" to 3600000,
++    "Europe/Andorra" to 3600000,
++    "Europe/Astrakhan" to 14400000,
++    "Europe/Athens" to 7200000,
++    "Europe/Belgrade" to 3600000,
++    "Europe/Berlin" to 3600000,
++    "Europe/Bratislava" to 3600000,
++    "Europe/Brussels" to 3600000,
++    "Europe/Bucharest" to 7200000,
++    "Europe/Budapest" to 3600000,
++    "Europe/Busingen" to 3600000,
++    "Europe/Chisinau" to 7200000,
++    "Europe/Copenhagen" to 3600000,
++    "Europe/Dublin" to 0,
++    "Europe/Gibraltar" to 3600000,
++    "Europe/Guernsey" to 0,
++    "Europe/Helsinki" to 7200000,
++    "Europe/Isle_of_Man" to 0,
++    "Europe/Istanbul" to 10800000,
++    "Europe/Jersey" to 0,
++    "Europe/Kaliningrad" to 7200000,
++    "Europe/Kiev" to 7200000,
++    "Europe/Kirov" to 10800000,
++    "Europe/Kyiv" to 7200000,
++    "Europe/Lisbon" to 0,
++    "Europe/Ljubljana" to 3600000,
++    "Europe/London" to 0,
++    "Europe/Luxembourg" to 3600000,
++    "Europe/Madrid" to 3600000,
++    "Europe/Malta" to 3600000,
++    "Europe/Mariehamn" to 7200000,
++    "Europe/Minsk" to 10800000,
++    "Europe/Monaco" to 3600000,
++    "Europe/Moscow" to 10800000,
++    "Europe/Nicosia" to 7200000,
++    "Europe/Oslo" to 3600000,
++    "Europe/Paris" to 3600000,
++    "Europe/Podgorica" to 3600000,
++    "Europe/Prague" to 3600000,
++    "Europe/Riga" to 7200000,
++    "Europe/Rome" to 3600000,
++    "Europe/Samara" to 14400000,
++    "Europe/San_Marino" to 3600000,
++    "Europe/Sarajevo" to 3600000,
++    "Europe/Saratov" to 14400000,
++    "Europe/Simferopol" to 10800000,
++    "Europe/Skopje" to 3600000,
++    "Europe/Sofia" to 7200000,
++    "Europe/Stockholm" to 3600000,
++    "Europe/Tallinn" to 7200000,
++    "Europe/Tirane" to 3600000,
++    "Europe/Ulyanovsk" to 14400000,
++    "Europe/Uzhgorod" to 7200000,
++    "Europe/Vaduz" to 3600000,
++    "Europe/Vatican" to 3600000,
++    "Europe/Vienna" to 3600000,
++    "Europe/Vilnius" to 7200000,
++    "Europe/Volgograd" to 10800000,
++    "Europe/Warsaw" to 3600000,
++    "Europe/Zagreb" to 3600000,
++    "Europe/Zaporozhye" to 7200000,
++    "Europe/Zurich" to 3600000,
++    "GMT" to 0,
++    "HST" to -36000000,
++    "Indian/Antananarivo" to 10800000,
++    "Indian/Chagos" to 21600000,
++    "Indian/Christmas" to 25200000,
++    "Indian/Cocos" to 23400000,
++    "Indian/Comoro" to 10800000,
++    "Indian/Kerguelen" to 18000000,
++    "Indian/Mahe" to 14400000,
++    "Indian/Maldives" to 18000000,
++    "Indian/Mauritius" to 14400000,
++    "Indian/Mayotte" to 10800000,
++    "Indian/Reunion" to 14400000,
++    "MET" to 3600000,
++    "MST" to -25200000,
++    "MST7MDT" to -25200000,
++    "PST8PDT" to -28800000,
++    "Pacific/Apia" to 46800000,
++    "Pacific/Auckland" to 43200000,
++    "Pacific/Bougainville" to 39600000,
++    "Pacific/Chatham" to 45900000,
++    "Pacific/Chuuk" to 36000000,
++    "Pacific/Easter" to -21600000,
++    "Pacific/Efate" to 39600000,
++    "Pacific/Enderbury" to 46800000,
++    "Pacific/Fakaofo" to 46800000,
++    "Pacific/Fiji" to 43200000,
++    "Pacific/Funafuti" to 43200000,
++    "Pacific/Galapagos" to -21600000,
++    "Pacific/Gambier" to -32400000,
++    "Pacific/Guadalcanal" to 39600000,
++    "Pacific/Guam" to 36000000,
++    "Pacific/Honolulu" to -36000000,
++    "Pacific/Kanton" to 46800000,
++    "Pacific/Kiritimati" to 50400000,
++    "Pacific/Kosrae" to 39600000,
++    "Pacific/Kwajalein" to 43200000,
++    "Pacific/Majuro" to 43200000,
++    "Pacific/Marquesas" to -34200000,
++    "Pacific/Midway" to -39600000,
++    "Pacific/Nauru" to 43200000,
++    "Pacific/Niue" to -39600000,
++    "Pacific/Norfolk" to 39600000,
++    "Pacific/Noumea" to 39600000,
++    "Pacific/Pago_Pago" to -39600000,
++    "Pacific/Palau" to 32400000,
++    "Pacific/Pitcairn" to -28800000,
++    "Pacific/Pohnpei" to 39600000,
++    "Pacific/Port_Moresby" to 36000000,
++    "Pacific/Rarotonga" to -36000000,
++    "Pacific/Saipan" to 36000000,
++    "Pacific/Tahiti" to -36000000,
++    "Pacific/Tarawa" to 43200000,
++    "Pacific/Tongatapu" to 46800000,
++    "Pacific/Wake" to 43200000,
++    "Pacific/Wallis" to 43200000,
++    "WET" to 0,
++)
++
++internal actual val systemTzdb: TimeZoneDatabase get() = tzdb.getOrThrow()
++
++private val tzdb = runCatching {
++    OhosTimeZoneDatabase()
++}
++
++internal actual fun currentSystemDefaultZone(): Pair<String, TimeZoneRules?> {
++    val zone = getSystemDefaultZone()
++    val offset = timezoneToOffset[zone] ?: 0
++    val rules = TimeZoneRules(emptyList(), listOf(UtcOffset(seconds = offset / 1000)), null)
++    return zone to rules
++}
++
++internal class OhosTimeZoneDatabase : TimeZoneDatabase {
++    override fun rulesForId(id: String): TimeZoneRules {
++        val offset = timezoneToOffset[id] ?: 0
++        return TimeZoneRules(emptyList(), listOf(UtcOffset(seconds = offset / 1000)), null)
++    }
++
++    override fun availableTimeZoneIds(): Set<String> {
++        return timezoneToOffset.keys.toSet()
++    }
++
++}
+\ No newline at end of file
+-- 
+2.48.1
+
