@@ -1,65 +1,95 @@
 # androidx.annotation
 
-This patch is built on the official androidx.annotation version 1.8.0 to support platform OpenHarmony。
+This patch is built on the official androidx.annotation version 1.8.0 to support OpenHarmony platform.
 
-# How to publish
+---
 
-## 1. download android-platform-frameworks-support
-At first, clone google `AOSP` project in local:
+# Part 1: Quick Start
 
+## 1. Add Maven Repository
+
+Add the remote repository in your project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        maven {
+            url = uri("https://mirrors.tencent.com/nexus/repository/maven-tencent/")
+        }
+    }
+}
 ```
+
+## 2. Add Dependencies
+
+Add the following dependency in your `commonMain` module's `build.gradle.kts`:
+
+```kotlin
+implementation("androidx.annotation:annotation:1.8.0-KBA-002")
+```
+
+---
+
+# Part 2: Build from Source
+
+## 1. Clone AOSP Support Repository
+
+Clone the Google AOSP support project:
+
+```bash
 git clone https://android.googlesource.com/platform/frameworks/support
 ```
 
-checkout commit [4e5e9e3ddec39fb6f9f34c89b1b4f9b58a1ab627](https://android.googlesource.com/platform/frameworks/support/+/4e5e9e3ddec39fb6f9f34c89b1b4f9b58a1ab627) and create branch:
+Checkout the specific commit:
 
-```
+```bash
 git checkout 4e5e9e3ddec39fb6f9f34c89b1b4f9b58a1ab627
 ```
 
-## 2. apply patch
+## 2. Apply Patch
 
-download [ov-androidx.annotation-1.8.0.patch](ov-androidx.annotation-1.8.0.patch) to local, and apply it:
+Download [ov-androidx.annotation-1.8.0.patch](ov-androidx.annotation-1.8.0.patch) and apply it:
 
-```
+```bash
 git apply ov-androidx.annotation-1.8.0.patch
 ```
 
-## 3. maven configuration
+## 3. Configure Maven Repository
 
-open `gradle.properties` , then config your remote maven url, username, password
+Add remote maven repositories in `buildSrc/repos.gradle`:
 
-```
-maven.remote.url=https://xxxx/repository/maven/xxx
-maven.remote.username=user_A
-maven.remote.password=password_A
-```
-
-and change your own annotation version in `libraryversions.toml`
-```
-ANNOTATION=xxxx
+```groovy
+handler.maven {
+    url = "https://mirrors.tencent.com/nexus/repository/maven-public"
+}
+handler.maven {
+    url = "https://mirrors.tencent.com/nexus/repository/maven-tencent"
+}
 ```
 
-## 4. publish androidx.annotation
+Configure maven publish settings in `playground-common/androidx-shared.properties`:
 
-enter `android-platform-frameworks-support` project' root path, and run the following commands
+```properties
+maven.remote.url=https://your-maven-repo-url
+maven.remote.username=your_username
+maven.remote.password=your_password
 ```
+
+Update the annotation version in `libraryversions.toml`:
+
+```toml
+ANNOTATION=1.8.0-KBA-002
+```
+
+## 4. Publish
+
+**Requirements:** JDK 21
+
+Navigate to the project root and run:
+
+```bash
 cd playground-projects/collection-playground
 ./gradlew studio
 ```
-a sub-project will be opened with a specific `Android Studio`, run publishing gradle task to deploy `annotation:annotation` after syncing.
 
-# How to import
-
-import androidx.annotation in `libs.version.toml`
-
-```
-annotationVersion = "xxxx"
-
-lib-androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotationVersion" }
-```
-
-and implementation in module's `build.gradle.kts`
-```
-implementation(lib.androidx.annotation)
-```
+After syncing, run the publishing gradle task in Android Studio to deploy the annotation artifacts.

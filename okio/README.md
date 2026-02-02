@@ -1,63 +1,113 @@
 # okio
 
-This patch is built on the official okio version c43c9a61 to support platform OpenHarmony。
+This patch is built on the official okio version 3.9.10 (commit c43c9a61) to support platform OpenHarmony.
 
-# How to publish
+## Quick Start
 
-## 1. download okio
-At first, clone offcial okio project in local:
+### 1. Add Maven Repository
 
+Add the Tencent Maven repository in your project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        maven {
+            url = uri("https://mirrors.tencent.com/nexus/repository/maven-tencent/")
+        }
+    }
+}
 ```
+
+### 2. Add Dependency
+
+Add the dependency in your module's `build.gradle.kts`:
+
+```kotlin
+implementation("com.squareup.okio:okio:3.9.10-KBA-001")
+```
+
+Specifically, if you want to use it on the HarmonyOS (OpenHarmony) platform, you need to add the dependency in `build.ohos.gradle.kts`:
+
+```kotlin
+implementation("com.squareup.okio:okio:3.9.10-KBA-001")
+```
+
+---
+
+## How to Publish
+
+### 1. Download okio
+
+Clone the official okio project locally:
+
+```bash
 git clone https://github.com/square/okio
 ```
 
-checkout tag c43c9a61 and create branch:
+Checkout commit c43c9a61 and create a new branch:
 
-```
+```bash
 git checkout -b 3.9.10-KBA-001 c43c9a61
 ```
 
-## 2. apply patch
+### 2. Apply Patch
 
-download patch to local, and apply it:
+Download the patch file to the project root directory and apply it:
 
-```
+```bash
 git apply okio.patch
 ```
 
-## 3. maven configuration
+### 3. Configure gradle.properties
 
-open `gradle.properties` , then config your upload maven url 、username、password
+Open `gradle.properties` file to configure the version number and Maven repository settings.
 
+#### 3.1 Modify Version Number
+
+Find and update the version property to your desired version:
+
+```properties
+version=3.9.10-ohos-1.0.0
 ```
+
+#### 3.2 Configure Maven Repository
+
+Add or modify the following Maven repository configuration:
+
+```properties
+# Maven repository URL
 maven_publish_url=https://xxxx/repository/maven/xxx
+
+# Maven credentials
 maven_username=user_A
 maven_password=password_A
 ```
 
-and change your own okio version
-```
-version=xxxx
-```
+### 4. Publish to Maven
 
-## 4. publish okio
+After Gradle sync completes, navigate to the okio project root directory and execute the publish command:
 
-after gradle sync, enter okio project' root path, execute `publish` ，publish okio to your own maven
-```
+**Option A: Publish to Remote Maven Repository**
+
+```bash
 ./gradlew publish
 ```
 
-# How to import
+**Option B: Publish to Local Maven Repository**
 
-import okio in `libs.version.toml`
+If you want to publish to local Maven repository for testing or local development, no additional configuration is required. Simply run:
 
-```
-okioVersion = "3.9.10-KBA-001"
-
-lib-okio = { group = "com.squareup.okio", name = "okio", version.ref = "okioVersion" }
+```bash
+./gradlew publishToMavenLocal
 ```
 
-and implementation in module's `build.gradle.kts`
-```
-implementation(lib.okio)
+After publishing locally, add `mavenLocal()` to your project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        // other repositories...
+    }
+}
 ```
