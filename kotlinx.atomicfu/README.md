@@ -1,63 +1,121 @@
 # kotlinx.atomicfu
 
-This patch is built on the official kotlinx.atomicfu version 0.23.2 to support platform OpenHarmony。
+This patch is built on the official kotlinx.atomicfu version 0.23.2 to support platform OpenHarmony.
 
-# How to publish
+## Quick Start
 
-## 1. download kotlinx.atomicfu
-At first, clone offcial kotlin.atomicfu project in local:
+### 1. Add Maven Repository
 
+Add the Tencent Maven repository in your project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        maven {
+            url = uri("https://mirrors.tencent.com/nexus/repository/maven-tencent/")
+        }
+    }
+}
 ```
+
+### 2. Add Dependency
+
+Add the dependency in your module's `build.gradle.kts`:
+
+```kotlin
+implementation("org.jetbrains.kotlinx:atomicfu:0.23.2-KBA-001")
+```
+
+Specifically, if you want to use it on the HarmonyOS (OpenHarmony) platform, you need to add the dependency in `build.ohos.gradle.kts`:
+
+```kotlin
+implementation("org.jetbrains.kotlinx:atomicfu:0.23.2-KBA-001")
+```
+
+---
+
+## How to Publish
+
+### 1. Download kotlinx.atomicfu
+
+Clone the official kotlinx.atomicfu project locally:
+
+```bash
 git clone https://github.com/Kotlin/kotlinx.atomicfu.git
 ```
 
-checkout tag 0.23.2 and create branch:
+Checkout tag 0.23.2 and create a new branch:
 
-```
+```bash
 git checkout -b v0.23.2 0.23.2
 ```
 
-## 2. apply patch
+### 2. Apply Patch
 
-download patch to local, and apply it:
+Download the patch file to the project root directory and apply it:
 
+```bash
+git apply kotlinx.atomicfu.patch
 ```
-git apply kotlinx-atomicfu.patch
+
+### 3. Configure gradle.properties
+
+Open `gradle.properties` file to configure the version number and Maven repository settings.
+
+#### 3.1 Modify Version Number
+
+Find and update the version property to your desired version:
+
+```properties
+version=0.23.2-ohos-1.0.0
 ```
 
-## 3. maven configuration
+> **Note**: There is a hardcoded version in `atomicfu/build.gradle`. If the version number does not take effect after modification, check the end of the `atomicfu/build.gradle` file and delete or comment out the hardcoded version:
+>
+> ```groovy
+> // Delete or comment out this line if it exists
+> version 'x.x.x'
+> ```
 
-open `gradle.properties` , then config your upload maven url 、username、password
+#### 3.2 Configure Maven Repository
 
-```
+Add or modify the following Maven repository configuration:
+
+```properties
+# Maven repository URL
 maven_publish_url=https://xxxx/repository/maven/xxx
+
+# Maven credentials
 maven_username=user_A
 maven_password=password_A
 ```
 
-and change your own kotlinx.atomicfu version
-```
-version=xxxx
-```
+### 4. Publish to Maven
 
-## 4. publish kotlinx.atomicfu
+After Gradle sync completes, navigate to the kotlinx.atomicfu project root directory and execute the publish command:
 
-after gradle sync, enter kotlinx.atomicfu project' root path, execute `publish` ，publish kotlinx.atomicfu to your own maven
-```
+**Option A: Publish to Remote Maven Repository**
+
+```bash
 ./gradlew publish
 ```
 
-# How to import
+**Option B: Publish to Local Maven Repository**
 
-import kotlinx.atomicfu in `libs.version.toml`
+If you want to publish to local Maven repository for testing or local development, no additional configuration is required. Simply run:
 
-```
-atomicfuVersion = "xxxx"
-
-lib-kotlin-atomicfu = { group = "org.jetbrains.kotlinx", name = "kotlinx-atomicfu", version.ref = "atomicfuVersion" }
+```bash
+./gradlew publishToMavenLocal
 ```
 
-and implementation in module's `build.gradle.kts`
+After publishing locally, add `mavenLocal()` to your project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        // other repositories...
+    }
+}
 ```
-implementation(lib.kotlin.atomicfu)
 ```

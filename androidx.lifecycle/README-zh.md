@@ -1,14 +1,14 @@
 # androidx.lifecycle
 
-This patch is built on the official androidx.lifecycle version 2.8.0 to support OpenHarmony platform.
+本补丁基于官方 androidx.lifecycle 2.8.0 版本构建，用于支持 OpenHarmony 平台。
 
 ---
 
-# Part 1: Quick Start
+# 快速接入
 
-## 1. Add Maven Repository
+## 1. 添加 Maven 仓库
 
-Add the remote repository in your project's `settings.gradle.kts`:
+在项目的 `settings.gradle.kts` 中添加远程仓库：
 
 ```kotlin
 dependencyResolutionManagement {
@@ -20,9 +20,9 @@ dependencyResolutionManagement {
 }
 ```
 
-## 2. Add Dependencies
+## 2. 添加依赖
 
-Add the following dependencies in your `commonMain` module's `build.gradle.kts`:
+在 `commonMain` 模块的 `build.gradle.kts` 中添加以下依赖：
 
 ```kotlin
 implementation("androidx.lifecycle:lifecycle-common:2.8.0-KBA-002")
@@ -32,33 +32,33 @@ implementation("androidx.lifecycle:lifecycle-viewmodel:2.8.0-KBA-002")
 
 ---
 
-# Part 2: Build from Source
+# 从源码构建发布
 
-## 1. Clone AOSP Support Repository
+## 1. 克隆 AOSP Support 仓库
 
-Clone the Google AOSP support project:
+克隆 Google AOSP support 项目：
 
 ```bash
 git clone https://android.googlesource.com/platform/frameworks/support
 ```
 
-Checkout the specific commit:
+切换到指定的 commit：
 
 ```bash
 git checkout 7ad6b8bbf8fa3d5a3c97feca6c52a1a2bf98a622
 ```
 
-## 2. Apply Patch
+## 2. 应用补丁
 
-Download [ov-androidx.lifecycle-2.8.0.patch](ov-androidx.lifecycle-2.8.0.patch) and apply it:
+下载 [ov-androidx.lifecycle-2.8.0.patch](ov-androidx.lifecycle-2.8.0.patch) 并应用：
 
 ```bash
 git apply ov-androidx.lifecycle-2.8.0.patch
 ```
 
-## 3. Configure Maven Repository
+## 3. 配置 Maven 仓库
 
-Add remote maven repositories in `buildSrc/repos.gradle`:
+在 `buildSrc/repos.gradle` 中添加远程 Maven 仓库，用于获取构建发布时需要的依赖：
 
 ```groovy
 handler.maven {
@@ -69,7 +69,7 @@ handler.maven {
 }
 ```
 
-Configure maven publish settings in `playground-common/androidx-shared.properties`:
+在 `playground-common/androidx-shared.properties` 中配置 Maven 发布信息：
 
 ```properties
 maven.remote.url=https://your-maven-repo-url
@@ -77,21 +77,19 @@ maven.remote.username=your_username
 maven.remote.password=your_password
 ```
 
-Update the lifecycle version in `libraryversions.toml`:
+在 `libraryversions.toml` 中更新 lifecycle 版本号：
 
 ```toml
 LIFECYCLE=XXX
 ```
 
-## 4. Publish
+## 4. 发布
 
-**Requirements:** JDK 21
+**环境要求：** JDK 21
 
-Navigate to the project root and run:
+进入项目根目录并执行：
 
 ```bash
 cd playground-projects/lifecycle-playground
 ./gradlew publish --dependency-verification=off
 ```
-
-After syncing, run the publishing gradle task in Android Studio to deploy the lifecycle artifacts.

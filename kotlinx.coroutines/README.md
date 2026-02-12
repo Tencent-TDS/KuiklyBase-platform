@@ -1,63 +1,113 @@
 # kotlinx.coroutines
 
-This patch is built on the official kotlinx.coroutines version 1.8.0 to support platform OpenHarmony。
+This patch is built on the official kotlinx.coroutines version 1.8.0 to support platform OpenHarmony.
 
-# How to publish 
+## Quick Start
 
-## 1. download kotlinx.coroutines
-At first, clone offcial kotlin.coroutines project in local:
+### 1. Add Maven Repository
 
+Add the Tencent Maven repository in your project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        maven {
+            url = uri("https://mirrors.tencent.com/nexus/repository/maven-tencent/")
+        }
+    }
+}
 ```
+
+### 2. Add Dependency
+
+Add the dependency in your module's `build.gradle.kts`:
+
+```kotlin
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0-KBA-001")
+```
+
+Specifically, if you want to use it on the HarmonyOS (OpenHarmony) platform, you need to add the dependency in `build.ohos.gradle.kts`:
+
+```kotlin
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0-KBA-001")
+```
+
+---
+
+## How to Publish
+
+### 1. Download kotlinx.coroutines
+
+Clone the official kotlinx.coroutines project locally:
+
+```bash
 git clone https://github.com/Kotlin/kotlinx.coroutines.git
 ```
 
-checkout tag 1.8.0 and create branch:
+Checkout tag 1.8.0 and create a new branch:
 
-```
+```bash
 git checkout -b v1.8.0 1.8.0
 ```
 
-## 2. apply patch
+### 2. Apply Patch
 
-download patch to local, and apply it:
+Download the patch file to the project root directory and apply it:
 
-```
+```bash
 git apply kotlinx-coroutines.patch
 ```
 
-## 3. maven configuration
+### 3. Configure gradle.properties
 
-open `gradle.properties` , then config your upload maven url 、username、password
+Open `gradle.properties` file to configure the version number and Maven repository settings.
 
+#### 3.1 Modify Version Number
+
+Find and update the version property to your desired version:
+
+```properties
+version=1.8.0-ohos-1.0.0
 ```
+
+#### 3.2 Configure Maven Repository
+
+Add or modify the following Maven repository configuration:
+
+```properties
+# Maven repository URL
 maven_publish_url=https://xxxx/repository/maven/xxx
+
+# Maven credentials
 maven_username=user_A
 maven_password=password_A
 ```
 
-and change your own kotlinx.coroutines version
-```
-version=xxxx
-```
+### 4. Publish to Maven
 
-## 4. publish kotlinx.coroutines
+After Gradle sync completes, navigate to the kotlinx.coroutines project root directory and execute the publish command:
 
-after gradle sync, enter kotlinx.coroutines project' root path, execute `publish` ，publish kotlinx.coroutines to your own maven
-```
+**Option A: Publish to Remote Maven Repository**
+
+```bash
 ./gradlew publish
 ```
 
-# How to import
+**Option B: Publish to Local Maven Repository**
 
-import kotlinx.coroutines in `libs.version.toml`
+If you want to publish to local Maven repository for testing or local development, no additional configuration is required. Simply run:
 
-```
-coroutinesVersion = "xxxx"
-
-lib-kotlin-coroutines = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutinesVersion" }
+```bash
+./gradlew publishToMavenLocal
 ```
 
-and implementation in module's `build.gradle.kts`
-```
-implementation(lib.kotlin.coroutines)
+After publishing locally, add `mavenLocal()` to your project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        // other repositories...
+    }
+}
 ```
