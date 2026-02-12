@@ -14,7 +14,7 @@ git clone https://github.com/JetBrains/skiko.git
 Check out the 0.7.97 tag and create a branch：
 
 ```
-git checkout -b v0.7.97 0.7.97
+git checkout v0.7.97 -b 0.7.97
 ```
 
 ## 2. apply patch
