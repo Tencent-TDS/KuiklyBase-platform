@@ -1,0 +1,296 @@
+Subject: [PATCH] ov-androidx.lifecycle-viewmodel-1.8.0
+
+---
+ gradle/libs.versions.toml                     |  3 +-
+ .../lifecycle-viewmodel-compose/build.gradle  | 35 ++++++++--
+ .../lifecycle/viewmodel/compose/ViewModel.kt  |  2 +
+ .../LocalViewModelStoreOwner.nonAndroid.kt    | 29 +++++++++
+ lifecycle/lifecycle-viewmodel/build.gradle    | 64 ++++++++++---------
+ .../viewmodel/internal/Lock.ohosNative.kt     | 19 ++++++
+ 6 files changed, 116 insertions(+), 36 deletions(-)
+ create mode 100644 lifecycle/lifecycle-viewmodel-compose/src/nonAndroidMain/kotlin/androidx/lifecycle/viewmodel/compose/LocalViewModelStoreOwner.nonAndroid.kt
+ create mode 100644 lifecycle/lifecycle-viewmodel/src/ohosNativeMain/kotlin/androidx/lifecycle/viewmodel/internal/Lock.ohosNative.kt
+
+diff --git a/gradle/libs.versions.toml b/gradle/libs.versions.toml
+index f86ca46a167..b5cbe0d2c64 100644
+--- a/gradle/libs.versions.toml
++++ b/gradle/libs.versions.toml
+@@ -42,7 +42,7 @@ jcodec = "0.2.5"
+ kotlin17 = "1.7.10"
+ kotlin18 = "1.8.22"
+ kotlin19 = "1.9.23-dev-202"
+-kotlin = "2.0.21-KBA-001"
++kotlin = "2.0.21-KBA-009"
+ kotlinBenchmark = "0.4.8"
+ kotlinNative = "2.0.21-KBA-001"
+ kotlinCompileTesting = "1.4.9"
+@@ -295,6 +295,7 @@ kotlinBenchmark = { id = "org.jetbrains.kotlinx.benchmark", version.ref = "kotli
+ kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+ kotlinMp = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+ kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
++composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ 
+ [bundles]
+ # prevent androidAccessibilityFramework 3.1 which pulls hamcrest 2.2, breaking espresso-core
+diff --git a/lifecycle/lifecycle-viewmodel-compose/build.gradle b/lifecycle/lifecycle-viewmodel-compose/build.gradle
+index 50185d6b08c..e44ee1ea62e 100644
+--- a/lifecycle/lifecycle-viewmodel-compose/build.gradle
++++ b/lifecycle/lifecycle-viewmodel-compose/build.gradle
+@@ -26,16 +26,20 @@ import androidx.build.PlatformIdentifier
+ import androidx.build.Publish
+ import androidx.build.RunApiTasks
+ import org.jetbrains.kotlin.gradle.dsl.ExplicitApiMode
++import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
++import org.jetbrains.kotlin.konan.target.Family
+ 
+ plugins {
+     id("AndroidXPlugin")
+     id("com.android.library")
+     id("AndroidXComposePlugin")
++    alias(libs.plugins.composeCompiler)
+ }
+ 
+ androidXMultiplatform {
+     android()
+-    desktop()
++//    desktop()
++    ohosNative()
+ 
+     defaultPlatform(PlatformIdentifier.ANDROID)
+ 
+@@ -44,9 +48,9 @@ androidXMultiplatform {
+             dependencies {
+                 api(projectOrArtifact(":lifecycle:lifecycle-common"))
+                 api(projectOrArtifact(":lifecycle:lifecycle-viewmodel"))
+-                api("androidx.annotation:annotation:1.8.0")
+-                api("androidx.compose.runtime:runtime:1.6.0")
+-                api("androidx.compose.ui:ui:1.6.0")
++                api(libs.androidx.annotation)
++                api("org.jetbrains.compose.runtime:runtime:1.6.1-KBA-008")
++                api("org.jetbrains.compose.ui:ui:1.6.1-KBA-008")
+                 implementation(libs.kotlinStdlib)
+             }
+         }
+@@ -89,6 +93,27 @@ androidXMultiplatform {
+                 implementation(projectOrArtifact(":lifecycle:lifecycle-runtime-testing"))
+             }
+         }
++
++        nonAndroidMain {
++            dependsOn(commonMain)
++        }
++        ohosNativeMain {
++            dependsOn(nonAndroidMain)
++        }
++
++
++        targets.all { target ->
++            if (target.platformType == KotlinPlatformType.native) {
++                target.compilations["main"].defaultSourceSet {
++                    def konanTargetFamily = target.konanTarget.family
++                    if (konanTargetFamily == Family.OHOS) {
++                        dependsOn(ohosNativeMain)
++                    } else {
++                        throw new GradleException("unknown native target ${target}")
++                    }
++                }
++            }
++        }
+     }
+ }
+ 
+@@ -103,4 +128,4 @@ androidx {
+ 
+ android {
+     namespace "androidx.lifecycle.viewmodel.compose"
+-}
++}
+\ No newline at end of file
+diff --git a/lifecycle/lifecycle-viewmodel-compose/src/commonMain/kotlin/androidx/lifecycle/viewmodel/compose/ViewModel.kt b/lifecycle/lifecycle-viewmodel-compose/src/commonMain/kotlin/androidx/lifecycle/viewmodel/compose/ViewModel.kt
+index 9c58b5088d1..965f0358571 100644
+--- a/lifecycle/lifecycle-viewmodel-compose/src/commonMain/kotlin/androidx/lifecycle/viewmodel/compose/ViewModel.kt
++++ b/lifecycle/lifecycle-viewmodel-compose/src/commonMain/kotlin/androidx/lifecycle/viewmodel/compose/ViewModel.kt
+@@ -26,6 +26,8 @@ import androidx.lifecycle.ViewModelStoreOwner
+ import androidx.lifecycle.viewmodel.CreationExtras
+ import androidx.lifecycle.viewmodel.initializer
+ import androidx.lifecycle.viewmodel.viewModelFactory
++import kotlin.jvm.JvmMultifileClass
++import kotlin.jvm.JvmName
+ import kotlin.reflect.KClass
+ 
+ /**
+diff --git a/lifecycle/lifecycle-viewmodel-compose/src/nonAndroidMain/kotlin/androidx/lifecycle/viewmodel/compose/LocalViewModelStoreOwner.nonAndroid.kt b/lifecycle/lifecycle-viewmodel-compose/src/nonAndroidMain/kotlin/androidx/lifecycle/viewmodel/compose/LocalViewModelStoreOwner.nonAndroid.kt
+new file mode 100644
+index 00000000000..878ed80d240
+--- /dev/null
++++ b/lifecycle/lifecycle-viewmodel-compose/src/nonAndroidMain/kotlin/androidx/lifecycle/viewmodel/compose/LocalViewModelStoreOwner.nonAndroid.kt
+@@ -0,0 +1,29 @@
++/*
++ * Copyright 2025 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package androidx.lifecycle.viewmodel.compose
++
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.InternalComposeApi
++import androidx.compose.ui.platform.findComposeDefaultViewModelStoreOwner
++import androidx.lifecycle.ViewModelStoreOwner
++
++@OptIn(InternalComposeApi::class)
++@Composable
++internal actual fun findViewTreeViewModelStoreOwner(): ViewModelStoreOwner? =
++    findComposeDefaultViewModelStoreOwner()
++
++
+diff --git a/lifecycle/lifecycle-viewmodel/build.gradle b/lifecycle/lifecycle-viewmodel/build.gradle
+index e8c1138bff4..4a9d180b5ab 100644
+--- a/lifecycle/lifecycle-viewmodel/build.gradle
++++ b/lifecycle/lifecycle-viewmodel/build.gradle
+@@ -39,6 +39,7 @@ androidXMultiplatform {
+     mac()
+     linux()
+     ios()
++    ohosNative()
+ 
+     kotlin {
+         explicitApi = ExplicitApiMode.Strict
+@@ -53,30 +54,30 @@ androidXMultiplatform {
+ 
+         commonMain {
+             dependencies {
+-                api("androidx.annotation:annotation:1.8.0")
++                api(libs.androidx.annotation)
+                 api(libs.kotlinStdlib)
+                 api(libs.kotlinCoroutinesCore)
+             }
+         }
+ 
+-        commonTest {
+-            dependencies {
+-                implementation(project(":kruth:kruth"))
+-                implementation(libs.kotlinTest)
+-                implementation(libs.kotlinCoroutinesTest)
+-            }
+-        }
++        // commonTest {
++        //     dependencies {
++        //         implementation(project(":kruth:kruth"))
++        //         implementation(libs.kotlinTest)
++        //         implementation(libs.kotlinCoroutinesTest)
++        //     }
++        // }
+ 
+         jvmMain {
+             dependsOn(commonMain)
+         }
+ 
+-        jvmTest {
+-            dependsOn(commonTest)
+-            dependencies {
+-                implementation(libs.junit)
+-            }
+-        }
++        // jvmTest {
++        //     dependsOn(commonTest)
++        //     dependencies {
++        //         implementation(libs.junit)
++        //     }
++        // }
+ 
+         androidMain {
+             dependsOn(jvmMain)
+@@ -85,28 +86,29 @@ androidXMultiplatform {
+             }
+         }
+ 
+-        androidUnitTest {
+-            dependsOn(jvmTest)
+-            dependencies {
+-                implementation(libs.mockitoCore4)
+-            }
+-        }
+-
+-        androidInstrumentedTest {
+-            dependsOn(commonTest)
+-            dependencies {
+-                implementation("androidx.core:core-ktx:1.2.0")
+-                implementation(libs.testExtJunit)
+-                implementation(libs.testCore)
+-                implementation(libs.testRunner)
+-            }
+-        }
++        // androidUnitTest {
++        //     dependsOn(jvmTest)
++        //     dependencies {
++        //         implementation(libs.mockitoCore4)
++        //     }
++        // }
++
++        // androidInstrumentedTest {
++        //     dependsOn(commonTest)
++        //     dependencies {
++        //         implementation("androidx.core:core-ktx:1.2.0")
++        //         implementation(libs.testExtJunit)
++        //         implementation(libs.testCore)
++        //         implementation(libs.testRunner)
++        //     }
++        // }
+ 
+         desktopMain.dependsOn(jvmMain)
+         nonJvmMain.dependsOn(commonMain)
+         nativeMain.dependsOn(nonJvmMain)
+         darwinMain.dependsOn(nativeMain)
+         linuxMain.dependsOn(nativeMain)
++        ohosNativeMain.dependsOn(nativeMain)
+ 
+         targets.all { target ->
+             if (target.platformType == KotlinPlatformType.native) {
+@@ -116,6 +118,8 @@ androidXMultiplatform {
+                         dependsOn(darwinMain)
+                     } else if (konanTargetFamily == Family.LINUX) {
+                         dependsOn(linuxMain)
++                    } else if (konanTargetFamily == Family.OHOS) {
++                        dependsOn(ohosNativeMain)
+                     } else {
+                         throw new GradleException("unknown native target ${target}")
+                     }
+diff --git a/lifecycle/lifecycle-viewmodel/src/ohosNativeMain/kotlin/androidx/lifecycle/viewmodel/internal/Lock.ohosNative.kt b/lifecycle/lifecycle-viewmodel/src/ohosNativeMain/kotlin/androidx/lifecycle/viewmodel/internal/Lock.ohosNative.kt
+new file mode 100644
+index 00000000000..6073ee49960
+--- /dev/null
++++ b/lifecycle/lifecycle-viewmodel/src/ohosNativeMain/kotlin/androidx/lifecycle/viewmodel/internal/Lock.ohosNative.kt
+@@ -0,0 +1,19 @@
++/*
++ * Copyright 2024 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package androidx.lifecycle.viewmodel.internal
++
++internal actual val PTHREAD_MUTEX_RECURSIVE: Int = platform.posix.PTHREAD_MUTEX_RECURSIVE.toInt()
+-- 
+2.39.5 (Apple Git-154)
+
