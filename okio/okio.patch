@@ -150,12 +150,13 @@ diff --git a/okio/src/unixMain/kotlin/okio/UnixPosixVariant.kt b/okio/src/unixMa
  import platform.posix.ENOENT
  import platform.posix.FILE
  import platform.posix.O_CREAT
-@@ -146,7 +146,7 @@
+@@ -146,7 +146,8 @@
      else -> O_RDWR or O_CREAT
    }
  
 -  val fid = open(file.toString(), flags, DEFFILEMODE)
-+  val fid = open(file.toString(), flags, 666)
++  // Kotlin 666 is decimal (0o1232), not octal 0o666. POSIX open() expects 0o666 for -rw-rw-rw-.
++  val fid = open(file.toString(), flags, 0o666)
    if (fid == -1) throw errnoToIOException(errno)
  
    // Use 'r+' to get reading and writing on the FILE, which is all we need.
